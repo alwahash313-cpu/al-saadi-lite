@@ -16,12 +16,15 @@ jobs:
         with:
           flutter-version: '3.35.2'
 
-      - name: Get dependencies
-        run: flutter pub get
+      - name: Check project
+  run: |
+    pwd
+    ls -la
+    test -f pubspec.yaml
 
-      - name: Build APK
-        run: flutter build apk --release
-
+- name: Get dependencies
+  run: flutter pub get
+  
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
