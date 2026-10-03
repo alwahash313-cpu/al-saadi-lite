@@ -1,4 +1,4 @@
-name: Build APK
+name: إنشاء ملف APK
 
 on:
   workflow_dispatch:
@@ -11,8 +11,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: تحميل المشروع
+      - name: تحميل الملفات
         uses: actions/checkout@v4
+
+      - name: فك ضغط المشروع
+        run: |
+          unzip -o al_saadi_lite_cloud_v17.zip
 
       - name: تثبيت Java
         uses: actions/setup-java@v4
@@ -28,16 +32,19 @@ jobs:
           cache: true
 
       - name: جلب الحزم
+        working-directory: ./al_saadi_lite_cloud_v17
         run: flutter pub get
 
       - name: فحص المشروع
+        working-directory: ./al_saadi_lite_cloud_v17
         run: flutter analyze
 
       - name: بناء APK
+        working-directory: ./al_saadi_lite_cloud_v17
         run: flutter build apk --release
 
       - name: رفع APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: al_saadi_lite_cloud_v17/build/app/outputs/flutter-apk/app-release.apk
