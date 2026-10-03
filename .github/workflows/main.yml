@@ -1,10 +1,10 @@
-name: Build APK2
+name: Inspect Flutter Project
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  inspect:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,22 +24,15 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Project found at: $PROJECT_DIR"
 
-      - name: Check project
+      - name: Inspect project
         run: |
-          pwd
-          ls -la "$PROJECT_DIR"
-          test -f "$PROJECT_DIR/pubspec.yaml"
+          echo "=== Project files ==="
+          find "$PROJECT_DIR" -maxdepth 3 -type f | sort
 
-      - name: Get dependencies
-        run: flutter pub get
-        working-directory: ${{ env.PROJECT_DIR }}
+          echo "=== Android files ==="
+          find "$PROJECT_DIR/android" -maxdepth 4 -type f 2>/dev/null | sort
 
-      - name: Build APK
-        run: flutter build apk --release
-        working-directory: ${{ env.PROJECT_DIR }}
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: al-saadi-lite-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+      - name: Check pubspec
+        run: |
+          echo "=== pubspec.yaml ==="
+          cat "$PROJECT_DIR/pubspec.yaml"
