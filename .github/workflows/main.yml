@@ -1,38 +1,43 @@
-name: Inspect Flutter Project
+name: Build APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
-  inspect:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: تحميل المشروع
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
+      - name: تثبيت Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: تثبيت Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.2'
+          flutter-version: '3.35.1'
+          channel: stable
+          cache: true
 
-      - name: Extract project
-        run: |
-          mkdir -p project
-          unzip -q al_saadi_lite_cloud_v17.zip -d project
-          PROJECT_DIR=$(dirname "$(find project -name pubspec.yaml -print -quit)")
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Project found at: $PROJECT_DIR"
+      - name: جلب الحزم
+        run: flutter pub get
 
-      - name: Inspect project
-        run: |
-          echo "=== Project files ==="
-          find "$PROJECT_DIR" -maxdepth 3 -type f | sort
+      - name: فحص المشروع
+        run: flutter analyze
 
-          echo "=== Android files ==="
-          find "$PROJECT_DIR/android" -maxdepth 4 -type f 2>/dev/null | sort
+      - name: بناء APK
+        run: flutter build apk --release
 
-      - name: Check pubspec
-        run: |
-          echo "=== pubspec.yaml ==="
-          cat "$PROJECT_DIR/pubspec.yaml"
+      - name: رفع APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
