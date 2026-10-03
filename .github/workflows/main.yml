@@ -16,20 +16,30 @@ jobs:
         with:
           flutter-version: '3.35.2'
 
+      - name: Extract project
+        run: |
+          mkdir -p project
+          unzip -q al_saadi_lite_cloud_v17.zip -d project
+          PROJECT_DIR=$(dirname "$(find project -name pubspec.yaml -print -quit)")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project found at: $PROJECT_DIR"
+
       - name: Check project
         run: |
           pwd
-          ls -la
-          test -f pubspec.yaml
+          ls -la "$PROJECT_DIR"
+          test -f "$PROJECT_DIR/pubspec.yaml"
 
       - name: Get dependencies
         run: flutter pub get
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: Build APK
         run: flutter build apk --release
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: al-saadi-lite-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
