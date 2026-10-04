@@ -14,150 +14,46 @@ jobs:
       - name: تحميل الملفات
         uses: actions/checkout@v4
 
-      - name: فك ضغط المشروع
+      - name: فك الضغط
         run: |
-          rm -rf flutter_project
-          mkdir flutter_project
+          mkdir -p flutter_project
           unzip -o al_saadi_lite_cloud_v17.zip -d flutter_project
 
-      - name: العثور على مشروع Flutter
+      - name: تحديد المشروع
         run: |
-          PROJECT_DIR=$(find flutter_project -type f -name "pubspec.yaml" -print -quit | xargs dirname)
+          PROJECT_DIR=$(dirname "$(find flutter_project -name pubspec.yaml -type f | head -1)")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "المشروع موجود في: $PROJECT_DIR"
 
-      - name: تثبيت Java
+      - name: Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: تثبيت Flutter
+      - name: Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.35.1"
           channel: stable
-          cache: true
+
+      - name: إصلاح الملفات
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          sed -i 's/&#91;/[/g; s/&#93;/]/g' lib/main.dart
+          sed -i 's/future: store.list()/future: store.load()/g' lib/main.dart
+          grep -q "import 'dart:async';" lib/main.dart || sed -i "1i import 'dart:async';" lib/main.dart
 
       - name: جلب الحزم
+        working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
-        working-directory: ${{ env.PROJECT_DIR }}
-
-      - name: إصلاح main.dart
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path("lib/main.dart")
-          t = p.read_text(encoding="utf-8")
-
-          t = t.replace("&#91;", "[")
-          t = t.replace("&#93;", "]")
-          t = t.replace("future: store.list(),", "future: store.load(),")
-
-          if "import 'dart:async';" not in t:
-              t = "import 'dart:async';\n" + t
-
-          p.write_text(t, encoding="utf-8")
-
-          print("تم تنظيف main.dart")
-          PY
-
-      - name: إصلاح دالة المشاريع
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path("lib/main.dart")
-          t = p.read_text(encoding="utf-8")
-
-          start = t.find("  Widget _projects() =>")
-          end = t.find("\nclass LiteEditor", start)
-
-          if start < 0:
-              raise SystemExit("لم يتم العثور على _projects")
-
-          if end < 0:
-              raise SystemExit("لم يتم العثور على LiteEditor")
-
-          replacement = """  Widget _projects() => FutureBuilder<List<EditorProject>>(
-            future: store.load(),
-            builder: (context, snap) {
-              final items = snap.data ?? <EditorProject>[];
-
-              return ListView(
-                padding: const EdgeInsets.all(18),
-                children: [
-                  const Text(
-                    'مشاريعي',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(30),
-                      child: Text(
-                        'ماكو مشاريع محفوظة بعد.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white54,
-                        ),
-                      ),
-                    ),
-                  ...items.map(
-                    (p) => Card(
-                      child: ListTile(
-                        title: Text(
-                          p.name,
-                          textAlign: TextAlign.right,
-                        ),
-                        subtitle: Text(
-                          '${p.clips.length} مقطع',
-                          textAlign: TextAlign.right,
-                        ),
-                        trailing: const Icon(
-                          Icons.movie_outlined,
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => LiteEditor(
-                                project: p,
-                                store: store,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-
-"""
-
-          t = t[:start] + replacement + t[end:]
-          p.write_text(t, encoding="utf-8")
-
-          print("تم إصلاح _projects")
-          PY
 
       - name: فحص المشروع
-        run: flutter analyze
         working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter analyze
 
       - name: بناء APK
-        run: flutter build apk --release
         working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter build apk --release
 
       - name: رفع APK
         uses: actions/upload-artifact@v4
