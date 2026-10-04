@@ -48,27 +48,95 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import html
 
           path = Path("lib/main.dart")
           text = path.read_text(encoding="utf-8")
 
-          # تحويل رموز HTML إلى رموز Dart الطبيعية
-          text = html.unescape(text)
+          if "import 'dart:async';" not in text:
+              text = "import 'dart:async';\n" + text
 
-          # إصلاح اسم الدالة
           text = text.replace(
               "future: store.list(),",
               "future: store.load(),"
           )
 
-          # إضافة dart:async إذا كانت غير موجودة
-          if "import 'dart:async';" not in text:
-              text = "import 'dart:async';\n" + text
+          start = text.find("  Widget _projects() =>")
+          end = text.find("\nclass LiteEditor", start)
+
+          if start == -1:
+              raise SystemExit("لم يتم العثور على _projects")
+
+          if end == -1:
+              raise SystemExit("لم يتم العثور على class LiteEditor")
+
+          new_projects = r"""  Widget _projects() => FutureBuilder<List<EditorProject>>(
+    future: store.load(),
+    builder: (context, snap) {
+      final items = snap.data ?? <EditorProject>[];
+
+      return ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          const Text(
+            'مشاريعي',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(30),
+              child: Text(
+                'ماكو مشاريع محفوظة بعد.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white54,
+                ),
+              ),
+            ),
+          ...items.map(
+            (p) => Card(
+              child: ListTile(
+                title: Text(
+                  p.name,
+                  textAlign: TextAlign.right,
+                ),
+                subtitle: Text(
+                  '${p.clips.length} مقطع',
+                  textAlign: TextAlign.right,
+                ),
+                trailing: const Icon(
+                  Icons.movie_outlined,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LiteEditor(
+                        project: p,
+                        store: store,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+
+"""
+
+          text = text[:start] + new_projects + text[end:]
 
           path.write_text(text, encoding="utf-8")
 
-          print("تم تنظيف وإصلاح main.dart بنجاح")
+          print("تم استبدال _projects بالكامل")
           PY
 
       - name: فحص المشروع
