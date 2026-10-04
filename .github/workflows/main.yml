@@ -41,8 +41,65 @@ jobs:
         run: |
           sed -i 's/store.list()/store.load()/g' lib/main.dart
           sed -i 's/&#91;/[/g; s/&#93;/]/g' lib/main.dart
-          sed -i '121s/))))),/))))))/' lib/main.dart
           grep -q "import 'dart:async';" lib/main.dart || sed -i "1i import 'dart:async';" lib/main.dart
+
+          perl -0777 -i -pe 's/  Widget _projects\(\) =>.*?\nclass LiteEditor/  Widget _projects() => FutureBuilder<List<EditorProject>>(
+            future: store.load(),
+            builder: (context, snap) {
+              final items = snap.data ?? const <EditorProject>[];
+              return ListView(
+                padding: const EdgeInsets.all(18),
+                children: [
+                  const Text(
+                    "مشاريعي",
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (items.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(30),
+                      child: Text(
+                        "ماكو مشاريع محفوظة بعد.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                  ...items.map(
+                    (p) => Card(
+                      child: ListTile(
+                        title: Text(
+                          p.name,
+                          textAlign: TextAlign.right,
+                        ),
+                        subtitle: const Text(
+                          "مشروع",
+                          textAlign: TextAlign.right,
+                        ),
+                        trailing: const Icon(Icons.movie_outlined),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LiteEditor(
+                                project: p,
+                                store: store,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+
+class LiteEditor/sg' lib/main.dart
 
       - name: جلب الحزم
         working-directory: ${{ env.PROJECT_DIR }}
