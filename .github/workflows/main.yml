@@ -48,28 +48,28 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import html
 
           path = Path("lib/main.dart")
-          text = path.read_text()
+          text = path.read_text(encoding="utf-8")
 
-          if "import 'dart:async';" not in text:
-              text = "import 'dart:async';\n" + text
+          # تحويل رموز HTML إلى رموز Dart الطبيعية
+          text = html.unescape(text)
 
+          # إصلاح اسم الدالة
           text = text.replace(
               "future: store.list(),",
               "future: store.load(),"
           )
 
-          path.write_text(text)
+          # إضافة dart:async إذا كانت غير موجودة
+          if "import 'dart:async';" not in text:
+              text = "import 'dart:async';\n" + text
 
-          print("تم إصلاح main.dart")
+          path.write_text(text, encoding="utf-8")
+
+          print("تم تنظيف وإصلاح main.dart بنجاح")
           PY
-
-      - name: عرض مكان الخطأ
-        run: |
-          echo "===== main.dart lines 105-130 ====="
-          nl -ba lib/main.dart | sed -n '105,130p'
-        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: فحص المشروع
         run: flutter analyze
