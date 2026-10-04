@@ -41,6 +41,7 @@ jobs:
         run: |
           sed -i 's/store.list()/store.load()/g' lib/main.dart
           sed -i 's/&#91;/[/g; s/&#93;/]/g' lib/main.dart
+          sed -i '121s/))))),/))))))/' lib/main.dart
           grep -q "import 'dart:async';" lib/main.dart || sed -i "1i import 'dart:async';" lib/main.dart
 
       - name: جلب الحزم
