@@ -87,21 +87,8 @@ jobs:
                               builder: (_) => LiteEditor(
                                 project: p,
                                 store: store,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
 
-class LiteEditor/sg' lib/main.dart
-
-      - name: جلب الحزم
+            - name: جلب الحزم
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
