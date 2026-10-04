@@ -60,75 +60,10 @@ jobs:
               "future: store.load(),"
           )
 
-          start = text.find("  Widget _projects() =>")
-          end = text.find("\n  );", start)
-
-          if start == -1 or end == -1:
-              raise SystemExit("لم يتم العثور على دالة _projects")
-
-          end += len("\n  );")
-
-          replacement = """  Widget _projects() => FutureBuilder<List<EditorProject>>(
-    future: store.load(),
-    builder: (context, snap) {
-      final items = snap.data ?? const <EditorProject>[];
-
-      return ListView(
-        padding: const EdgeInsets.all(18),
-        children: [
-          const Text(
-            'مشاريعي',
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(30),
-              child: Text(
-                'ماكو مشاريع محفوظة بعد.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54),
-              ),
-            ),
-          ...items.map(
-            (p) => Card(
-              child: ListTile(
-                title: Text(
-                  p.name,
-                  textAlign: TextAlign.right,
-                ),
-                subtitle: Text(
-                  '${p.clips.length} مقطع',
-                  textAlign: TextAlign.right,
-                ),
-                trailing: const Icon(Icons.movie_outlined),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => LiteEditor(
-                        project: p,
-                        store: store,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      );
-    },
-  );"""
-
-          text = text[:start] + replacement + text[end:]
           path.write_text(text)
 
-          print("تم إصلاح main.dart بنجاح")
+          print("تم إصلاح main.dart")
+
           PY
 
       - name: فحص المشروع
