@@ -36,11 +36,85 @@ jobs:
           flutter-version: "3.35.1"
           channel: stable
 
-      - name: إصلاح الملفات
+      - name: إصلاح main.dart
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          sed -i "s/store.list()/store.load()/g" lib/main.dart
-          grep -q "import 'dart:async';" lib/main.dart || sed -i "1i import 'dart:async';" lib/main.dart
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/main.dart")
+          s = p.read_text(encoding="utf-8")
+
+          s = s.replace("store.list()", "store.load()")
+
+          if "import 'dart:async';" not in s:
+              s = "import 'dart:async';\n" + s
+
+          start = s.find("  Widget _projects() =>")
+          end = s.find("\nclass LiteEditor", start)
+
+          if start == -1 or end == -1:
+              raise SystemExit("لم يتم العثور على دالة _projects")
+
+          new_projects = """  Widget _projects() => FutureBuilder<List<EditorProject>>(
+    future: store.load(),
+    builder: (context, snap) {
+      final items = snap.data ?? const <EditorProject>[];
+
+      return ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          const Text(
+            'مشاريعي',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(30),
+              child: Text(
+                'ماكو مشاريع محفوظة بعد.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+          ...items.map(
+            (p) => Card(
+              child: ListTile(
+                title: Text(
+                  p.name,
+                  textAlign: TextAlign.right,
+                ),
+                subtitle: Text(
+                  '${p.clips.length} مقطع',
+                  textAlign: TextAlign.right,
+                ),
+                trailing: const Icon(Icons.movie_outlined),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LiteEditor(
+                      project: p,
+                      store: store,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+"""
+
+          s = s[:start] + new_projects + s[end:]
+          p.write_text(s, encoding="utf-8")
+          PY
 
       - name: جلب الحزم
         working-directory: ${{ env.PROJECT_DIR }}
