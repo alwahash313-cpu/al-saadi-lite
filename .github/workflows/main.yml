@@ -1,94 +1,39 @@
-name: إنشاء ملف APK
+name: Flutter Build
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+env:
+  PROJECT_DIR: .
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: تحميل الملفات
+      - name: تحميل المشروع
         uses: actions/checkout@v4
 
-      - name: فك الضغط
-        run: |
-          mkdir -p flutter_project
-          unzip -o al_saadi_lite_cloud_v17.zip -d flutter_project
-
-      - name: تحديد المشروع
-        run: |
-          PROJECT_DIR=$(dirname "$(find flutter_project -name pubspec.yaml -type f | head -1)")
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Java
+      - name: إعداد Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Flutter
+      - name: إعداد Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.35.1"
           channel: stable
+          flutter-version: "3.35.7"
 
-      - name: إصلاح الملفات
+      - name: التحقق من Flutter
         working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          sed -i 's/store.list()/store.load()/g' lib/main.dart
-          sed -i 's/&#91;/[/g; s/&#93;/]/g' lib/main.dart
-          grep -q "import 'dart:async';" lib/main.dart || sed -i "1i import 'dart:async';" lib/main.dart
+        run: flutter --version
 
-          perl -0777 -i -pe 's/  Widget _projects\(\) =>.*?\nclass LiteEditor/  Widget _projects() => FutureBuilder<List<EditorProject>>(
-            future: store.load(),
-            builder: (context, snap) {
-              final items = snap.data ?? const <EditorProject>[];
-              return ListView(
-                padding: const EdgeInsets.all(18),
-                children: [
-                  const Text(
-                    "مشاريعي",
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(30),
-                      child: Text(
-                        "ماكو مشاريع محفوظة بعد.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white54),
-                      ),
-                    ),
-                  ...items.map(
-                    (p) => Card(
-                      child: ListTile(
-                        title: Text(
-                          p.name,
-                          textAlign: TextAlign.right,
-                        ),
-                        subtitle: const Text(
-                          "مشروع",
-                          textAlign: TextAlign.right,
-                        ),
-                        trailing: const Icon(Icons.movie_outlined),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => LiteEditor(
-                                project: p,
-                                store: store,
-
-            - name: جلب الحزم
+      - name: جلب الحزم
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
@@ -103,6 +48,5 @@ jobs:
       - name: رفع APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
+          name: al-saadi-lite-apk
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
