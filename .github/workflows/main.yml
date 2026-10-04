@@ -6,9 +6,6 @@ on:
       - main
   workflow_dispatch:
 
-env:
-  PROJECT_DIR: .
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,6 +13,11 @@ jobs:
     steps:
       - name: تحميل المشروع
         uses: actions/checkout@v4
+
+      - name: البحث عن مشروع Flutter
+        run: |
+          echo "البحث عن pubspec.yaml..."
+          find . -name pubspec.yaml -print
 
       - name: إعداد Java
         uses: actions/setup-java@v4
@@ -27,26 +29,28 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: "3.35.7"
-
-      - name: التحقق من Flutter
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter --version
 
       - name: جلب الحزم
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter pub get
+        run: |
+          PROJECT_DIR=$(dirname "$(find . -name pubspec.yaml -print -quit)")
+          echo "Flutter project: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          flutter pub get
 
       - name: فحص المشروع
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter analyze
+        run: |
+          PROJECT_DIR=$(dirname "$(find . -name pubspec.yaml -print -quit)")
+          cd "$PROJECT_DIR"
+          flutter analyze
 
       - name: بناء APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release
+        run: |
+          PROJECT_DIR=$(dirname "$(find . -name pubspec.yaml -print -quit)")
+          cd "$PROJECT_DIR"
+          flutter build apk --release
 
       - name: رفع APK
         uses: actions/upload-artifact@v4
         with:
           name: al-saadi-lite-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          path: "**/build/app/outputs/flutter-apk/app-release.apk"
