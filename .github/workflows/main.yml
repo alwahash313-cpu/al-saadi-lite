@@ -1,4 +1,4 @@
-name: إنشاء ملف APK
+name: فحص مشروع السعدي
 
 on:
   workflow_dispatch:
@@ -43,11 +43,22 @@ jobs:
         run: flutter pub get
         working-directory: ${{ env.PROJECT_DIR }}
 
-      - name: عرض project_store.dart
+      - name: البحث عن ProjectStore
         run: |
-          echo "===== بداية project_store.dart ====="
-          nl -ba lib/project_store.dart | sed -n '1,250p'
-          echo "===== نهاية project_store.dart ====="
+          echo "===== ملفات المشروع ====="
+          find . -type f -name "*.dart" -print
+
+          echo "===== أماكن ProjectStore ====="
+          grep -Rni "class ProjectStore" . --include="*.dart" || true
+
+          echo "===== أماكن الدوال داخل project_store ====="
+          find . -type f -name "project_store.dart" -print -exec sh -c 'echo "===== $1 ====="; nl -ba "$1"; echo "===== نهاية الملف ====="' _ {} \;
+
+      - name: عرض بداية main.dart
+        run: |
+          echo "===== main.dart من 1 إلى 160 ====="
+          nl -ba lib/main.dart | sed -n '1,160p'
+          echo "===== نهاية الجزء ====="
         working-directory: ${{ env.PROJECT_DIR }}
 
       - name: فحص المشروع
