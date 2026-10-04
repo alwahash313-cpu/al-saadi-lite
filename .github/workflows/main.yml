@@ -1,3 +1,41 @@
+name: إنشاء ملف APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: تحميل الملفات
+        uses: actions/checkout@v4
+
+      - name: فك الضغط
+        run: |
+          mkdir -p flutter_project
+          unzip -o al_saadi_lite_cloud_v17.zip -d flutter_project
+
+      - name: تحديد المشروع
+        run: |
+          PROJECT_DIR=$(dirname "$(find flutter_project -name pubspec.yaml -type f | head -1)")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.1"
+          channel: stable
+
       - name: إصلاح الملفات
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
@@ -5,33 +43,23 @@
           from pathlib import Path
 
           p = Path("lib/main.dart")
-          text = p.read_text(encoding="utf-8")
+          s = p.read_text(encoding="utf-8")
 
-          # إصلاح رموز HTML إن وجدت
-          text = text.replace("&#91;", "[")
-          text = text.replace("&#93;", "]")
+          s = s.replace("store.list()", "store.load()")
+          s = s.replace("&#91;", "[")
+          s = s.replace("&#93;", "]")
 
-          # إصلاح اسم الدالة
-          text = text.replace(
-              "future: store.list(),",
-              "future: store.load(),"
-          )
+          if "import 'dart:async';" not in s:
+              s = "import 'dart:async';\n" + s
 
-          # إضافة dart:async
-          if "import 'dart:async';" not in text:
-              text = "import 'dart:async';\n" + text
+          start = s.find("  Widget _projects() =>")
+          end = s.find("\nclass LiteEditor", start)
 
-          # استبدال _projects() بالكامل
-          start = text.find("  Widget _projects() =>")
-          end = text.find("\nclass LiteEditor", start)
-
-          if start == -1 or end == -1:
-              raise SystemExit("لم يتم العثور على دالة _projects")
-
-          new_code = """  Widget _projects() => FutureBuilder<List<EditorProject>>(
+          if start != -1 and end != -1:
+              projects = r'''  Widget _projects() => FutureBuilder<List<EditorProject>>(
     future: store.load(),
     builder: (context, snap) {
-      final items = snap.data ?? <EditorProject>[];
+      final items = snap.data ?? const <EditorProject>[];
 
       return ListView(
         padding: const EdgeInsets.all(18),
@@ -51,9 +79,7 @@
               child: Text(
                 'ماكو مشاريع محفوظة بعد.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white54,
-                ),
+                style: TextStyle(color: Colors.white54),
               ),
             ),
           ...items.map(
@@ -68,17 +94,15 @@
                   textAlign: TextAlign.right,
                 ),
                 trailing: const Icon(Icons.movie_outlined),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => LiteEditor(
-                        project: p,
-                        store: store,
-                      ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LiteEditor(
+                      project: p,
+                      store: store,
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
           ),
@@ -86,11 +110,27 @@
       );
     },
   );
+'''
+              s = s[:start] + projects + s[end:]
 
-"""
-
-          text = text[:start] + new_code + text[end:]
-          p.write_text(text, encoding="utf-8")
-
-          print("تم إصلاح main.dart")
+          p.write_text(s, encoding="utf-8")
           PY
+
+      - name: جلب الحزم
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter pub get
+
+      - name: فحص المشروع
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter analyze
+
+      - name: بناء APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter build apk --release
+
+      - name: رفع APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
