@@ -1,51 +1,37 @@
 name: Build Flutter APK
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+workflow_dispatch:
+push:
+branches:
+- main
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+build:
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout project
-        uses: actions/checkout@v4
+steps:
+  - name: Checkout project
+    uses: actions/checkout@v4
 
-      - name: Find Flutter project
-        id: find_project
-        shell: bash
-        run: |
-          PROJECT_DIR=$(find . -name pubspec.yaml -not -path './.git/*' -print -quit | xargs -r dirname)
+  - name: Setup Flutter
+    uses: subosito/flutter-action@v2
+    with:
+      flutter-version: '3.35.2'
+      channel: stable
+      cache: true
 
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: pubspec.yaml was not found."
-            echo "The Flutter project files are missing from the repository."
-            exit 1
-          fi
+  - name: Get dependencies
+    run: flutter pub get
 
-          echo "Flutter project found at: $PROJECT_DIR"
-          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+  - name: Analyze project
+    run: flutter analyze
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.35.2'
-          channel: stable
-          cache: true
+  - name: Build APK
+    run: flutter build apk --release
 
-      - name: Get dependencies
-        working-directory: ${{ steps.find_project.outputs.project_dir }}
-        run: flutter pub get
-
-      - name: Build APK
-        working-directory: ${{ steps.find_project.outputs.project_dir }}
-        run: flutter build apk --release
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: al-saadi-lite-apk
-          path: ${{ steps.find_project.outputs.project_dir }}/build/app/outputs/flutter-apk/app-release.apk
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: al-saadi-lite-apk
+      path: build/app/outputs/flutter-apk/app-release.apk
