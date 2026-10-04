@@ -43,10 +43,11 @@ jobs:
         run: flutter pub get
         working-directory: ${{ env.PROJECT_DIR }}
 
-      - name: عرض كود main.dart
+      - name: عرض كامل main.dart
         run: |
-          echo "===== main.dart الأسطر 100 إلى 150 ====="
-          nl -ba lib/main.dart | sed -n '100,150p'
+          echo "===== بداية main.dart ====="
+          nl -ba lib/main.dart | sed -n '1,250p'
+          echo "===== نهاية main.dart ====="
         working-directory: ${{ env.PROJECT_DIR }}
 
       - name: فحص المشروع
