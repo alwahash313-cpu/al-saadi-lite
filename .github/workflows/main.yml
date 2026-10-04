@@ -46,7 +46,7 @@ jobs:
       - name: عرض project_store.dart
         run: |
           echo "===== بداية project_store.dart ====="
-          nl -ba project_store.dart | sed -n '1,250p'
+          nl -ba lib/project_store.dart | sed -n '1,250p'
           echo "===== نهاية project_store.dart ====="
         working-directory: ${{ env.PROJECT_DIR }}
 
