@@ -49,25 +49,5 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
-      - name: عرض الجزء المطلوب من main.dart
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "===== main.dart الأسطر 100 إلى 150 ====="
-          nl -ba lib/main.dart | sed -n '100,150p'
-
-      - name: فحص المشروع
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter analyze
-
-      - name: بناء APK
-        if: success()
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release
-
-      - name: رفع APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
+      - name: عرض جزء من main.dart
+        working-directory: ${{ env
