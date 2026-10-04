@@ -1,4 +1,4 @@
-name: فحص مشروع السعدي
+name: إنشاء ملف APK
 
 on:
   workflow_dispatch:
@@ -43,23 +43,93 @@ jobs:
         run: flutter pub get
         working-directory: ${{ env.PROJECT_DIR }}
 
-      - name: البحث عن ProjectStore
-        run: |
-          echo "===== ملفات المشروع ====="
-          find . -type f -name "*.dart" -print
-
-          echo "===== أماكن ProjectStore ====="
-          grep -Rni "class ProjectStore" . --include="*.dart" || true
-
-          echo "===== أماكن الدوال داخل project_store ====="
-          find . -type f -name "project_store.dart" -print -exec sh -c 'echo "===== $1 ====="; nl -ba "$1"; echo "===== نهاية الملف ====="' _ {} \;
-
-      - name: عرض بداية main.dart
-        run: |
-          echo "===== main.dart من 1 إلى 160 ====="
-          nl -ba lib/main.dart | sed -n '1,160p'
-          echo "===== نهاية الجزء ====="
+      - name: إصلاح main.dart
         working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/main.dart")
+          text = path.read_text()
+
+          if "import 'dart:async';" not in text:
+              text = "import 'dart:async';\n" + text
+
+          text = text.replace(
+              "future: store.list(),",
+              "future: store.load(),"
+          )
+
+          start = text.find("  Widget _projects() =>")
+          end = text.find("\n  );", start)
+
+          if start == -1 or end == -1:
+              raise SystemExit("لم يتم العثور على دالة _projects")
+
+          end += len("\n  );")
+
+          replacement = """  Widget _projects() => FutureBuilder<List<EditorProject>>(
+    future: store.load(),
+    builder: (context, snap) {
+      final items = snap.data ?? const <EditorProject>[];
+
+      return ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          const Text(
+            'مشاريعي',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(30),
+              child: Text(
+                'ماكو مشاريع محفوظة بعد.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+          ...items.map(
+            (p) => Card(
+              child: ListTile(
+                title: Text(
+                  p.name,
+                  textAlign: TextAlign.right,
+                ),
+                subtitle: Text(
+                  '${p.clips.length} مقطع',
+                  textAlign: TextAlign.right,
+                ),
+                trailing: const Icon(Icons.movie_outlined),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LiteEditor(
+                        project: p,
+                        store: store,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );"""
+
+          text = text[:start] + replacement + text[end:]
+          path.write_text(text)
+
+          print("تم إصلاح main.dart بنجاح")
+          PY
 
       - name: فحص المشروع
         run: flutter analyze
