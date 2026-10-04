@@ -36,28 +36,14 @@ jobs:
           flutter-version: "3.35.1"
           channel: stable
 
-      - name: إصلاح main.dart
+      - name: إصلاح الملفات
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           sed -i 's/store.list()/store.load()/g' lib/main.dart
-          grep -q "import '\''dart:async'\'';" lib/main.dart || sed -i "1i import 'dart:async';" lib/main.dart
-
-          sed -i '113,124c\
-          Widget _projects() => FutureBuilder<List<EditorProject>>(\
-            future: store.load(),\
-            builder: (context, snap) {\
-              final items = snap.data ?? const <EditorProject>[];\
-              return ListView(\
-                padding: const EdgeInsets.all(18),\
-                children: [\
-                  const Text('\''مشاريعي'\'', textAlign: TextAlign.right, style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),\
-                  const SizedBox(height: 16),\
-                  if (items.isEmpty) const Padding(padding: EdgeInsets.all(30), child: Text('\''ماكو مشاريع محفوظة بعد.'\'', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54))),\
-                  ...items.map((p) => Card(child: ListTile(title: Text(p.name, textAlign: TextAlign.right), subtitle: Text('\''${p.clips.length} مقطع'\'', textAlign: TextAlign.right), trailing: const Icon(Icons.movie_outlined), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LiteEditor(project: p, store: store))))),\
-                ],\
-              );\
-            },\
-          );' lib/main.dart
+          grep -q "import 'dart:async';" lib/main.dart || sed -i "1i import 'dart:async';" lib/main.dart
+          echo "===== main.dart 105-135 ====="
+          nl -ba lib/main.dart | sed -n '105,135p'
+          echo "===== نهاية المقطع ====="
 
       - name: جلب الحزم
         working-directory: ${{ env.PROJECT_DIR }}
