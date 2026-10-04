@@ -30,12 +30,12 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: تثبيت Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.1'
+          flutter-version: "3.35.1"
           channel: stable
           cache: true
 
@@ -46,12 +46,110 @@ jobs:
       - name: إصلاح main.dart
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          python3 -c "from pathlib import Path; p=Path('lib/main.dart'); t=p.read_text(encoding='utf-8'); t=t.replace('&#91;','[').replace('&#93;',']'); t=t.replace('future: store.list(),','future: store.load(),'); t='import \\'dart:async\\';\\n'+t if 'import \\'dart:async\\';' not in t else t; p.write_text(t,encoding='utf-8'); print('تم تنظيف main.dart')"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/main.dart")
+          t = p.read_text(encoding="utf-8")
+
+          t = t.replace("&#91;", "[")
+          t = t.replace("&#93;", "]")
+          t = t.replace("future: store.list(),", "future: store.load(),")
+
+          if "import 'dart:async';" not in t:
+              t = "import 'dart:async';\n" + t
+
+          p.write_text(t, encoding="utf-8")
+
+          print("تم تنظيف main.dart")
+          PY
 
       - name: إصلاح دالة المشاريع
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          python3 -c "from pathlib import Path; p=Path('lib/main.dart'); t=p.read_text(encoding='utf-8'); s=t.find('  Widget _projects() =>'); e=t.find('\\nclass LiteEditor',s); r='''  Widget _projects() => FutureBuilder<List<EditorProject>>(\\n    future: store.load(),\\n    builder: (context, snap) {\\n      final items = snap.data ?? <EditorProject>[];\\n      return ListView(\\n        padding: const EdgeInsets.all(18),\\n        children: [\\n          const Text(\\n            'مشاريعي',\\n            textAlign: TextAlign.right,\\n            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),\\n          ),\\n          const SizedBox(height: 16),\\n          if (items.isEmpty)\\n            const Padding(\\n              padding: EdgeInsets.all(30),\\n              child: Text(\\n                'ماكو مشاريع محفوظة بعد.',\\n                textAlign: TextAlign.center,\\n                style: TextStyle(color: Colors.white54),\\n              ),\\n            ),\\n          ...items.map((p) => Card(\\n            child: ListTile(\\n              title: Text(p.name, textAlign: TextAlign.right),\\n              subtitle: Text('${p.clips.length} مقطع', textAlign: TextAlign.right),\\n              trailing: const Icon(Icons.movie_outlined),\\n              onTap: () {\\n                Navigator.push(\\n                  context,\\n                  MaterialPageRoute(\\n                    builder: (_) => LiteEditor(project: p, store: store),\\n                  ),\\n                );\\n              },\\n            ),\\n          )),\\n        ],\\n      );\\n    },\\n  );\\n\\n'''; assert s>=0 and e>=0; p.write_text(t[:s]+r+t[e:],encoding='utf-8'); print('تم إصلاح _projects')"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/main.dart")
+          t = p.read_text(encoding="utf-8")
+
+          start = t.find("  Widget _projects() =>")
+          end = t.find("\nclass LiteEditor", start)
+
+          if start < 0:
+              raise SystemExit("لم يتم العثور على _projects")
+
+          if end < 0:
+              raise SystemExit("لم يتم العثور على LiteEditor")
+
+          replacement = """  Widget _projects() => FutureBuilder<List<EditorProject>>(
+            future: store.load(),
+            builder: (context, snap) {
+              final items = snap.data ?? <EditorProject>[];
+
+              return ListView(
+                padding: const EdgeInsets.all(18),
+                children: [
+                  const Text(
+                    'مشاريعي',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (items.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(30),
+                      child: Text(
+                        'ماكو مشاريع محفوظة بعد.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white54,
+                        ),
+                      ),
+                    ),
+                  ...items.map(
+                    (p) => Card(
+                      child: ListTile(
+                        title: Text(
+                          p.name,
+                          textAlign: TextAlign.right,
+                        ),
+                        subtitle: Text(
+                          '${p.clips.length} مقطع',
+                          textAlign: TextAlign.right,
+                        ),
+                        trailing: const Icon(
+                          Icons.movie_outlined,
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LiteEditor(
+                                project: p,
+                                store: store,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+
+"""
+
+          t = t[:start] + replacement + t[end:]
+          p.write_text(t, encoding="utf-8")
+
+          print("تم إصلاح _projects")
+          PY
 
       - name: فحص المشروع
         run: flutter analyze
