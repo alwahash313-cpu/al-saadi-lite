@@ -40,10 +40,8 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           sed -i 's/store.list()/store.load()/g' lib/main.dart
+          sed -i 's/&#91;/[/g; s/&#93;/]/g' lib/main.dart
           grep -q "import 'dart:async';" lib/main.dart || sed -i "1i import 'dart:async';" lib/main.dart
-          echo "===== main.dart 105-135 ====="
-          nl -ba lib/main.dart | sed -n '105,135p'
-          echo "===== نهاية المقطع ====="
 
       - name: جلب الحزم
         working-directory: ${{ env.PROJECT_DIR }}
