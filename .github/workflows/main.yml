@@ -16,7 +16,19 @@ jobs:
 
       - name: فك ضغط المشروع
         run: |
-          unzip -o al_saadi_lite_cloud_v17.zip
+          unzip -o al_saadi_lite_cloud_v17.zip -d flutter_project
+
+      - name: العثور على مشروع Flutter
+        run: |
+          PROJECT_DIR=$(find flutter_project -type f -name "pubspec.yaml" -print -quit | xargs dirname)
+
+          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
+            echo "لم يتم العثور على pubspec.yaml"
+            exit 1
+          fi
+
+          echo "مشروع Flutter موجود في: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: تثبيت Java
         uses: actions/setup-java@v4
@@ -32,19 +44,20 @@ jobs:
           cache: true
 
       - name: جلب الحزم
-        working-directory: ./al_saadi_lite_cloud_v17
+        working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
       - name: فحص المشروع
-        working-directory: ./al_saadi_lite_cloud_v17
+        working-directory: ${{ env.PROJECT_DIR }}
         run: flutter analyze
 
       - name: بناء APK
-        working-directory: ./al_saadi_lite_cloud_v17
+        working-directory: ${{ env.PROJECT_DIR }}
         run: flutter build apk --release
 
       - name: رفع APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
-          path: al_saadi_lite_cloud_v17/build/app/outputs/flutter-apk/app-release.apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
