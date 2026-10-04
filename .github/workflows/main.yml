@@ -63,8 +63,13 @@ jobs:
           path.write_text(text)
 
           print("تم إصلاح main.dart")
-
           PY
+
+      - name: عرض مكان الخطأ
+        run: |
+          echo "===== main.dart lines 105-130 ====="
+          nl -ba lib/main.dart | sed -n '105,130p'
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: فحص المشروع
         run: flutter analyze
