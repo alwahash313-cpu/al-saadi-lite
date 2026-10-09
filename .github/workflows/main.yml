@@ -1,5 +1,6 @@
 name: Build Flutter APK
-on: [workflow_dispatch, push]
+on:
+workflow_dispatch:
 
 jobs:
 build:
@@ -11,13 +12,6 @@ steps:
     with:
       flutter-version: '3.35.2'
       channel: stable
-
-  - name: Check project
-    run: |
-      if [ ! -f pubspec.yaml ]; then
-        echo "ERROR: pubspec.yaml not found in repository root"
-        exit 1
-      fi
 
   - name: Install dependencies
     run: flutter pub get
