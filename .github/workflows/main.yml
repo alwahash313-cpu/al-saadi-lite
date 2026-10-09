@@ -1,5 +1,4 @@
 name: Build Flutter APK
-
 on:
 workflow_dispatch:
 push:
@@ -9,12 +8,15 @@ branches:
 jobs:
 build:
 runs-on: ubuntu-latest
-
 steps:
-  - name: Download project
-    uses: actions/checkout@v4
+- uses: actions/checkout@v4
 
-  - name: Find Flutter project
+  - uses: subosito/flutter-action@v2
+    with:
+      flutter-version: '3.35.2'
+      channel: stable
+
+  - name: Find project
     id: project
     run: |
       FILE=$(find . -name pubspec.yaml -not -path './.git/*' -print -quit)
@@ -24,18 +26,11 @@ steps:
       fi
       echo "dir=$(dirname "$FILE")" >> "$GITHUB_OUTPUT"
 
-  - name: Setup Flutter
-    uses: subosito/flutter-action@v2
-    with:
-      flutter-version: '3.35.2'
-      channel: stable
-      cache: true
-
   - name: Install dependencies
     working-directory: ${{ steps.project.outputs.dir }}
     run: flutter pub get
 
-  - name: Check project
+  - name: Analyze
     working-directory: ${{ steps.project.outputs.dir }}
     run: flutter analyze
 
