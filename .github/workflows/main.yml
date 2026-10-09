@@ -1,9 +1,5 @@
 name: Build Flutter APK
-on:
-workflow_dispatch:
-push:
-branches:
-- main
+on: [workflow_dispatch, push]
 
 jobs:
 build:
@@ -16,30 +12,24 @@ steps:
       flutter-version: '3.35.2'
       channel: stable
 
-  - name: Find project
-    id: project
+  - name: Check project
     run: |
-      FILE=$(find . -name pubspec.yaml -not -path './.git/*' -print -quit)
-      if [ -z "$FILE" ]; then
-        echo "ERROR: pubspec.yaml not found"
+      if [ ! -f pubspec.yaml ]; then
+        echo "ERROR: pubspec.yaml not found in repository root"
         exit 1
       fi
-      echo "dir=$(dirname "$FILE")" >> "$GITHUB_OUTPUT"
 
   - name: Install dependencies
-    working-directory: ${{ steps.project.outputs.dir }}
     run: flutter pub get
 
-  - name: Analyze
-    working-directory: ${{ steps.project.outputs.dir }}
+  - name: Analyze project
     run: flutter analyze
 
   - name: Build APK
-    working-directory: ${{ steps.project.outputs.dir }}
     run: flutter build apk --release
 
   - name: Upload APK
     uses: actions/upload-artifact@v4
     with:
       name: al-saadi-lite-apk
-      path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
+      path: build/app/outputs/flutter-apk/app-release.apk
