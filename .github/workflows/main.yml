@@ -1,6 +1,7 @@
 name: Build Flutter APK
-on:
+'on':
 workflow_dispatch:
+
 jobs:
 build:
 runs-on: ubuntu-latest
@@ -10,14 +11,10 @@ steps:
 with:
 flutter-version: '3.35.2'
 channel: stable
-- name: Install dependencies
-run: flutter pub get
-- name: Analyze project
-run: flutter analyze
-- name: Build APK
-run: flutter build apk --release
-- name: Upload APK
-uses: actions/upload-artifact@v4
+- run: flutter pub get
+- run: flutter analyze
+- run: flutter build apk --release
+- uses: actions/upload-artifact@v4
 with:
 name: al-saadi-lite-apk
 path: build/app/outputs/flutter-apk/app-release.apk
