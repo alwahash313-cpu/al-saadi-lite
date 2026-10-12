@@ -22,19 +22,27 @@ jobs:
             echo "ERROR: pubspec.yaml not found in the repository root"
             exit 1
           fi
+          if [ ! -f MainActivity.kt ] || [ ! -f AndroidManifest.xml ]; then
+            echo "ERROR: upload MainActivity.kt and AndroidManifest.xml to the repository root"
+            exit 1
+          fi
+
+      - name: Create assets folder
+        run: mkdir -p assets && touch assets/.gitkeep
 
       - name: Recreate Android folder
         run: |
           rm -rf android
-          flutter create --platforms=android --project-name=al_saadi_lite .
+          flutter create --platforms=android --org com.example --project-name=al_saadi_lite .
 
-      - name: Add internet permission
+      - name: Apply native media code
         run: |
-          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' android/app/src/main/AndroidManifest.xml
-
-      - name: Add media permissions
-        run: |
-          sed -i 's|<application|<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>\n    <application|' android/app/src/main/AndroidManifest.xml
+          rm -rf android/app/src/main/kotlin
+          mkdir -p android/app/src/main/kotlin/com/alsaadi/app
+          cp MainActivity.kt android/app/src/main/kotlin/com/alsaadi/app/MainActivity.kt
+          cp AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          sed -i 's/com\.example\.al_saadi_lite/com.alsaadi.app/g' android/app/build.gradle*
+          grep -n "com.alsaadi.app" android/app/build.gradle*
 
       - name: Install dependencies
         run: flutter pub get
