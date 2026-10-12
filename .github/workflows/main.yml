@@ -28,6 +28,10 @@ jobs:
           rm -rf android
           flutter create --platforms=android --project-name=al_saadi_lite .
 
+      - name: Add internet permission
+        run: |
+          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' android/app/src/main/AndroidManifest.xml
+
       - name: Install dependencies
         run: flutter pub get
 
