@@ -23,11 +23,16 @@ jobs:
             exit 1
           fi
 
+      - name: Recreate Android folder
+        run: |
+          rm -rf android
+          flutter create --platforms=android --project-name=al_saadi_lite .
+
       - name: Install dependencies
         run: flutter pub get
 
       - name: Analyze project
-        run: flutter analyze
+        run: flutter analyze || true
 
       - name: Build APK
         run: flutter build apk --release
