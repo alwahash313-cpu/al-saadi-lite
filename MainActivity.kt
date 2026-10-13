@@ -218,7 +218,10 @@ class MainActivity : FlutterActivity() {
             .setEffects(Effects(processors, emptyList<Effect>()))
             .build()
         val composition = Composition.Builder(
-            listOf(EditedMediaItemSequence(listOf(visualItem)), EditedMediaItemSequence(listOf(musicItem)))
+            listOf(
+                EditedMediaItemSequence.Builder().addItem(visualItem).build(),
+                EditedMediaItemSequence.Builder().addItem(musicItem).build()
+            )
         ).build()
         exportComposition(composition, output, result)
     }
