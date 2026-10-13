@@ -16,19 +16,22 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Check Flutter project
+      - name: Check project files
         run: |
-          if [ ! -f pubspec.yaml ]; then
-            echo "ERROR: pubspec.yaml not found in the repository root"
-            exit 1
-          fi
-          if [ ! -f MainActivity.kt ] || [ ! -f AndroidManifest.xml ]; then
-            echo "ERROR: upload MainActivity.kt and AndroidManifest.xml to the repository root"
-            exit 1
-          fi
+          for f in pubspec.yaml AndroidManifest.xml MainActivity_v2.txt main_v3.dart native_media_engine_v2.dart splash_assets_v3.dart; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: missing $f in repository root"
+              exit 1
+            fi
+          done
 
-      - name: Create assets folder
-        run: mkdir -p assets && touch assets/.gitkeep
+      - name: Apply Dart updates
+        run: |
+          mkdir -p lib assets
+          touch assets/.gitkeep
+          cp main_v3.dart lib/main.dart
+          cp splash_assets_v3.dart lib/splash_assets.dart
+          cp native_media_engine_v2.dart lib/native_media_engine.dart
 
       - name: Recreate Android folder
         run: |
@@ -39,10 +42,30 @@ jobs:
         run: |
           rm -rf android/app/src/main/kotlin
           mkdir -p android/app/src/main/kotlin/com/alsaadi/app
-          cp MainActivity.kt android/app/src/main/kotlin/com/alsaadi/app/MainActivity.kt
+          cp MainActivity_v2.txt android/app/src/main/kotlin/com/alsaadi/app/MainActivity.kt
           cp AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           sed -i 's/com\.example\.al_saadi_lite/com.alsaadi.app/g' android/app/build.gradle*
           grep -n "com.alsaadi.app" android/app/build.gradle*
+          sed -i 's/Theme.Light.NoTitleBar/Theme.Black.NoTitleBar/g' android/app/src/main/res/values/styles.xml || true
+
+      - name: Add Media3 dependencies
+        run: |
+          cat >> android/app/build.gradle.kts <<'GRADLE'
+
+          dependencies {
+              implementation("androidx.media3:media3-common:1.4.1")
+              implementation("androidx.media3:media3-effect:1.4.1")
+              implementation("androidx.media3:media3-transformer:1.4.1")
+          }
+
+          android {
+              lint {
+                  checkReleaseBuilds = false
+                  abortOnError = false
+              }
+          }
+          GRADLE
+          tail -n 18 android/app/build.gradle.kts
 
       - name: Install dependencies
         run: flutter pub get
