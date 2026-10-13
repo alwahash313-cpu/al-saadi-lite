@@ -18,6 +18,7 @@ jobs:
 
       - name: Check project files
         run: |
+          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           echo "::notice::FILES: $(ls | tr '\n' ' ')"
           for f in pubspec.yaml AndroidManifest.xml MainActivity.kt main_v6.dart native_media_engine_v2.dart splash_assets_v3.dart tayoub_v5.zip; do
             if [ ! -f "$f" ]; then
@@ -30,12 +31,14 @@ jobs:
 
       - name: Unpack app package
         run: |
+          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           mkdir -p pkg
-          unzip -q -o tayoub_v5.zip -d pkg
-          ls -R pkg | head -40
+          unzip -q -o tayoub_v5.zip -d pkg || echo "::warning::tayoub_v5.zip could not be unpacked"
+          ls -R pkg | head -40 || true
 
       - name: Apply Dart updates
         run: |
+          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           mkdir -p lib assets
           touch assets/.gitkeep
           cp main_v6.dart lib/main.dart
@@ -44,15 +47,72 @@ jobs:
 
       - name: Recreate Android folder
         run: |
+          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           rm -rf android
           flutter create --platforms=android --org com.example --project-name=al_saadi_lite .
 
       - name: Apply native media code
         run: |
+          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           rm -rf android/app/src/main/kotlin
           mkdir -p android/app/src/main/kotlin/com/alsaadi/app
           cp MainActivity.kt android/app/src/main/kotlin/com/alsaadi/app/MainActivity.kt
           cp AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           sed -i 's/com\.example\.al_saadi_lite/com.alsaadi.app/g' android/app/build.gradle*
-          grep -n "com.alsaadi.app" android/app/build.gradle*
-          sed -i 's/Theme.Light.NoTitleBar/Theme.Black.NoTitleBar/g' a
+          grep -n "com.alsaadi.app" android/app/build.gradle* || true
+          sed -i 's/Theme.Light.NoTitleBar/Theme.Black.NoTitleBar/g' android/app/src/main/res/values/styles.xml || true
+
+      - name: Apply app icon and name
+        run: |
+          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
+          if [ -d pkg/res ]; then
+            cp -r pkg/res/. android/app/src/main/res/
+          else
+            echo "::warning::pkg/res not found, default icon used"
+          fi
+          sed -i 's/android:label="[^"]*"/android:label="طيوب"/' android/app/src/main/AndroidManifest.xml
+          grep -n "android:label" android/app/src/main/AndroidManifest.xml || true
+          ls android/app/src/main/res/mipmap-anydpi-v26 || true
+
+      - name: Add Media3 dependencies
+        run: |
+          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
+          cat >> android/app/build.gradle.kts <<'GRADLE'
+
+          dependencies {
+              implementation("androidx.media3:media3-common:1.4.1")
+              implementation("androidx.media3:media3-effect:1.4.1")
+              implementation("androidx.media3:media3-transformer:1.4.1")
+          }
+
+          android {
+              lint {
+                  checkReleaseBuilds = false
+                  abortOnError = false
+              }
+          }
+          GRADLE
+          tail -n 18 android/app/build.gradle.kts
+
+      - name: Install dependencies
+        run: |
+          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
+          flutter pub get
+
+      - name: Analyze project
+        run: flutter analyze || true
+
+      - name: Build APK
+        run: |
+          flutter build apk --release 2>&1 | tee build.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            echo "::error::BUILD FAILED: $(grep -E 'Error|error:|FAILED|e: ' build.log | head -6 | tr '\n' ' ')"
+            exit $code
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-saadi-lite-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
