@@ -18,14 +18,15 @@ jobs:
 
       - name: Check project files
         run: |
+          echo "::notice::FILES: $(ls | tr '\n' ' ')"
           for f in pubspec.yaml AndroidManifest.xml MainActivity.kt main_v6.dart native_media_engine_v2.dart splash_assets_v3.dart tayoub_v5.zip; do
             if [ ! -f "$f" ]; then
-              echo "ERROR: missing $f in repository root"
+              echo "::error::MISSING FILE: $f"
               exit 1
             fi
           done
-          grep -q mixMusic MainActivity.kt || { echo "ERROR: MainActivity.kt in repo is the OLD version"; exit 1; }
-          grep -q MediaApi main_v6.dart || { echo "ERROR: main_v6.dart is wrong"; exit 1; }
+          grep -q mixMusic MainActivity.kt || { echo "::error::MainActivity.kt is the OLD version"; exit 1; }
+          grep -q MediaApi main_v6.dart || { echo "::error::main_v6.dart is wrong"; exit 1; }
 
       - name: Unpack app package
         run: |
@@ -54,45 +55,4 @@ jobs:
           cp AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           sed -i 's/com\.example\.al_saadi_lite/com.alsaadi.app/g' android/app/build.gradle*
           grep -n "com.alsaadi.app" android/app/build.gradle*
-          sed -i 's/Theme.Light.NoTitleBar/Theme.Black.NoTitleBar/g' android/app/src/main/res/values/styles.xml || true
-
-      - name: Apply app icon and name
-        run: |
-          cp -r pkg/res/. android/app/src/main/res/
-          sed -i 's/android:label="[^"]*"/android:label="طيوب"/' android/app/src/main/AndroidManifest.xml
-          grep -n "android:label" android/app/src/main/AndroidManifest.xml
-          ls android/app/src/main/res/mipmap-anydpi-v26
-
-      - name: Add Media3 dependencies
-        run: |
-          cat >> android/app/build.gradle.kts <<'GRADLE'
-
-          dependencies {
-              implementation("androidx.media3:media3-common:1.4.1")
-              implementation("androidx.media3:media3-effect:1.4.1")
-              implementation("androidx.media3:media3-transformer:1.4.1")
-          }
-
-          android {
-              lint {
-                  checkReleaseBuilds = false
-                  abortOnError = false
-              }
-          }
-          GRADLE
-          tail -n 18 android/app/build.gradle.kts
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Analyze project
-        run: flutter analyze || true
-
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: al-saadi-lite-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          sed -i 's/Theme.Light.NoTitleBar/Theme.Black.NoTitleBar/g' a
