@@ -18,12 +18,14 @@ jobs:
 
       - name: Check project files
         run: |
-          for f in pubspec.yaml AndroidManifest.xml MainActivity_v4.txt native_media_engine_v2.dart splash_assets_v3.dart tayoub_v5.zip; do
+          for f in pubspec.yaml AndroidManifest.xml MainActivity.kt main_v6.dart native_media_engine_v2.dart splash_assets_v3.dart tayoub_v5.zip; do
             if [ ! -f "$f" ]; then
               echo "ERROR: missing $f in repository root"
               exit 1
             fi
           done
+          grep -q mixMusic MainActivity.kt || { echo "ERROR: MainActivity.kt in repo is the OLD version"; exit 1; }
+          grep -q MediaApi main_v6.dart || { echo "ERROR: main_v6.dart is wrong"; exit 1; }
 
       - name: Unpack app package
         run: |
@@ -35,7 +37,7 @@ jobs:
         run: |
           mkdir -p lib assets
           touch assets/.gitkeep
-          cp pkg/main.dart lib/main.dart
+          cp main_v6.dart lib/main.dart
           cp splash_assets_v3.dart lib/splash_assets.dart
           cp native_media_engine_v2.dart lib/native_media_engine.dart
 
@@ -48,7 +50,7 @@ jobs:
         run: |
           rm -rf android/app/src/main/kotlin
           mkdir -p android/app/src/main/kotlin/com/alsaadi/app
-          cp MainActivity_v4.txt android/app/src/main/kotlin/com/alsaadi/app/MainActivity.kt
+          cp MainActivity.kt android/app/src/main/kotlin/com/alsaadi/app/MainActivity.kt
           cp AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           sed -i 's/com\.example\.al_saadi_lite/com.alsaadi.app/g' android/app/build.gradle*
           grep -n "com.alsaadi.app" android/app/build.gradle*
