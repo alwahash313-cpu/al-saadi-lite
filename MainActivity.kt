@@ -1,5 +1,6 @@
 package com.alsaadi.app
 
+import android.graphics.BitmapFactory
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
@@ -18,11 +19,14 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
+import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.RgbAdjustment
 import androidx.media3.effect.RgbFilter
 import androidx.media3.effect.SpeedChangeEffect
+import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
@@ -130,6 +134,12 @@ class MainActivity : FlutterActivity() {
                         val volume = (call.argument<Number>("volume") ?: 1.0).toFloat()
                         mixMusic(input, isImage, durationMs, audio, output, keepOriginal, volume, result)
                     }
+                    "overlayImage" -> {
+                        val input = call.argument<String>("input")!!
+                        val overlay = call.argument<String>("overlay")!!
+                        val output = call.argument<String>("output")!!
+                        overlayImage(input, overlay, output, result)
+                    }
                     "saveVideo" -> {
                         val path = call.argument<String>("path")!!
                         val name = call.argument<String>("name") ?: ("tayoub_" + System.currentTimeMillis() + ".mp4")
@@ -222,6 +232,23 @@ class MainActivity : FlutterActivity() {
                 EditedMediaItemSequence.Builder().addItem(visualItem).build(),
                 EditedMediaItemSequence.Builder().addItem(musicItem).build()
             )
+        ).build()
+        exportComposition(composition, output, result)
+    }
+
+    private fun overlayImage(input: String, overlay: String, output: String, result: MethodChannel.Result) {
+        val bmp = BitmapFactory.decodeFile(overlay)
+        if (bmp == null) {
+            result.error("MEDIA_ERROR", "تعذر قراءة صورة النص", null)
+            return
+        }
+        val ov = BitmapOverlay.createStaticBitmapOverlay(bmp)
+        val effect = OverlayEffect(listOf<TextureOverlay>(ov))
+        val item = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(File(input))))
+            .setEffects(Effects(emptyList<AudioProcessor>(), listOf<Effect>(effect)))
+            .build()
+        val composition = Composition.Builder(
+            listOf(EditedMediaItemSequence.Builder().addItem(item).build())
         ).build()
         exportComposition(composition, output, result)
     }
