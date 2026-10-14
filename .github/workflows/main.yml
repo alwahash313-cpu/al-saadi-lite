@@ -45,6 +45,61 @@ jobs:
           cp splash_assets_v3.dart lib/splash_assets.dart
           cp native_media_engine_v2.dart lib/native_media_engine.dart
 
+      - name: Patch video player diagnostics
+        run: |
+          cat > patch_player.py <<'PYEOF'
+          import sys
+          p = sys.argv[1]
+          s = open(p, encoding='utf-8').read()
+
+          def rep(old, new, name):
+              global s
+              if s.count(old) == 1:
+                  s = s.replace(old, new)
+                  print('patched: ' + name)
+              else:
+                  print('::warning::patch not applied: ' + name)
+
+          rep("      await c.initialize().timeout(const Duration(seconds: 20));\n",
+              "      await c.initialize().timeout(const Duration(seconds: 20));\n      c.addListener(_onTick);\n",
+              'listener')
+
+          rep("  void dispose() { controller?.dispose(); progressSub?.cancel(); super.dispose(); }\n",
+              "  void dispose() { controller?.dispose(); progressSub?.cancel(); super.dispose(); }\n"
+              "\n"
+              "  void _onTick() {\n"
+              "    final c = controller;\n"
+              "    if (c == null || !mounted) return;\n"
+              "    if (c.value.hasError && loadError == null) {\n"
+              "      setState(() => loadError = 'خطأ أثناء التشغيل: ${c.value.errorDescription}');\n"
+              "    } else {\n"
+              "      setState(() {});\n"
+              "    }\n"
+              "  }\n"
+              "\n"
+              "  Future<void> _togglePlay() async {\n"
+              "    final c = controller;\n"
+              "    if (c == null) return;\n"
+              "    try {\n"
+              "      if (c.value.isPlaying) {\n"
+              "        await c.pause();\n"
+              "      } else {\n"
+              "        await c.setVolume(1.0);\n"
+              "        await c.play();\n"
+              "      }\n"
+              "    } catch (e) { _msg('تعذر التشغيل: $e'); }\n"
+              "  }\n",
+              'methods')
+
+          rep("        if (controller != null) IconButton(icon: Icon(controller!.value.isPlaying ? Icons.pause : Icons.play_arrow), onPressed: () { setState(() { controller!.value.isPlaying ? controller!.pause() : controller!.play(); }); }),\n",
+              "        if (controller != null) IconButton(icon: Icon(controller!.value.isPlaying ? Icons.pause : Icons.play_arrow), onPressed: _togglePlay),\n"
+              "        if (controller != null) Text('المشغل: ${controller!.value.isPlaying ? \"يعمل\" : \"متوقف\"} | ${controller!.value.position.inSeconds}/${controller!.value.duration.inSeconds} ث | تخزين مؤقت: ${controller!.value.isBuffering ? \"نعم\" : \"لا\"} | ${controller!.value.hasError ? \"خطأ: ${controller!.value.errorDescription}\" : \"بدون خطأ\"}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.white54)),\n",
+              'button')
+
+          open(p, 'w', encoding='utf-8').write(s)
+          PYEOF
+          python3 patch_player.py lib/main.dart
+
       - name: Recreate Android folder
         run: |
           trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
@@ -66,53 +121,4 @@ jobs:
         run: |
           trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           if [ -d pkg/res ]; then
-            cp -r pkg/res/. android/app/src/main/res/
-          else
-            echo "::warning::pkg/res not found, default icon used"
-          fi
-          sed -i 's/android:label="[^"]*"/android:label="طيوب"/' android/app/src/main/AndroidManifest.xml
-          grep -n "android:label" android/app/src/main/AndroidManifest.xml || true
-          ls android/app/src/main/res/mipmap-anydpi-v26 || true
-
-      - name: Add Media3 dependencies
-        run: |
-          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
-          cat >> android/app/build.gradle.kts <<'GRADLE'
-
-          dependencies {
-              implementation("androidx.media3:media3-common:1.4.1")
-              implementation("androidx.media3:media3-effect:1.4.1")
-              implementation("androidx.media3:media3-transformer:1.4.1")
-          }
-
-          android {
-              lint {
-                  checkReleaseBuilds = false
-                  abortOnError = false
-              }
-          }
-          GRADLE
-          tail -n 18 android/app/build.gradle.kts
-
-      - name: Install dependencies
-        run: |
-          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
-          flutter pub get
-
-      - name: Analyze project
-        run: flutter analyze || true
-
-      - name: Build APK
-        run: |
-          flutter build apk --release 2>&1 | tee build.log
-          code=${PIPESTATUS[0]}
-          if [ "$code" -ne 0 ]; then
-            echo "::error::BUILD FAILED: $(grep -E 'Error|error:|FAILED|e: ' build.log | head -6 | tr '\n' ' ')"
-            exit $code
-          fi
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: al-saadi-lite-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+            cp -r pkg/
