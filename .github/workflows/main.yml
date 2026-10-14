@@ -81,6 +81,11 @@ jobs:
           grep -n "android:label" android/app/src/main/AndroidManifest.xml || true
           ls android/app/src/main/res/mipmap-anydpi-v26 || true
 
+      - name: Disable Impeller (video rendering fix)
+        run: |
+          sed -i 's#</application>#<meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false"/></application>#' android/app/src/main/AndroidManifest.xml
+          grep -n "EnableImpeller" android/app/src/main/AndroidManifest.xml || echo "::warning::Impeller flag not added"
+
       - name: Add Media3 dependencies
         run: |
           cat >> android/app/build.gradle.kts <<'GRADLE'
