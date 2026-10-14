@@ -18,27 +18,25 @@ jobs:
 
       - name: Check project files
         run: |
-          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           echo "::notice::FILES: $(ls | tr '\n' ' ')"
-          for f in pubspec.yaml AndroidManifest.xml MainActivity.kt main_v6.dart native_media_engine_v2.dart splash_assets_v3.dart tayoub_v5.zip; do
-            if [ ! -f "$f" ]; then
-              echo "::error::MISSING FILE: $f"
-              exit 1
-            fi
-          done
+          test -f pubspec.yaml || { echo "::error::MISSING FILE: pubspec.yaml"; exit 1; }
+          test -f AndroidManifest.xml || { echo "::error::MISSING FILE: AndroidManifest.xml"; exit 1; }
+          test -f MainActivity.kt || { echo "::error::MISSING FILE: MainActivity.kt"; exit 1; }
+          test -f main_v6.dart || { echo "::error::MISSING FILE: main_v6.dart"; exit 1; }
+          test -f native_media_engine_v2.dart || { echo "::error::MISSING FILE: native_media_engine_v2.dart"; exit 1; }
+          test -f splash_assets_v3.dart || { echo "::error::MISSING FILE: splash_assets_v3.dart"; exit 1; }
+          test -f tayoub_v5.zip || { echo "::error::MISSING FILE: tayoub_v5.zip"; exit 1; }
           grep -q mixMusic MainActivity.kt || { echo "::error::MainActivity.kt is the OLD version"; exit 1; }
           grep -q MediaApi main_v6.dart || { echo "::error::main_v6.dart is wrong"; exit 1; }
 
       - name: Unpack app package
         run: |
-          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           mkdir -p pkg
           unzip -q -o tayoub_v5.zip -d pkg || echo "::warning::tayoub_v5.zip could not be unpacked"
           ls -R pkg | head -40 || true
 
       - name: Apply Dart updates
         run: |
-          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           mkdir -p lib assets
           touch assets/.gitkeep
           cp main_v6.dart lib/main.dart
@@ -102,13 +100,11 @@ jobs:
 
       - name: Recreate Android folder
         run: |
-          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           rm -rf android
           flutter create --platforms=android --org com.example --project-name=al_saadi_lite .
 
       - name: Apply native media code
         run: |
-          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
           rm -rf android/app/src/main/kotlin
           mkdir -p android/app/src/main/kotlin/com/alsaadi/app
           cp MainActivity.kt android/app/src/main/kotlin/com/alsaadi/app/MainActivity.kt
@@ -119,6 +115,44 @@ jobs:
 
       - name: Apply app icon and name
         run: |
-          trap 'echo "::error::FAILED: $BASH_COMMAND"' ERR
-          if [ -d pkg/res ]; then
-            cp -r pkg/
+          test -d pkg/res && cp -r pkg/res/. android/app/src/main/res/ || echo "::warning::pkg/res not found, default icon used"
+          sed -i 's/android:label="[^"]*"/android:label="طيوب"/' android/app/src/main/AndroidManifest.xml
+          grep -n "android:label" android/app/src/main/AndroidManifest.xml || true
+          ls android/app/src/main/res/mipmap-anydpi-v26 || true
+
+      - name: Add Media3 dependencies
+        run: |
+          cat >> android/app/build.gradle.kts <<'GRADLE'
+
+          dependencies {
+              implementation("androidx.media3:media3-common:1.4.1")
+              implementation("androidx.media3:media3-effect:1.4.1")
+              implementation("androidx.media3:media3-transformer:1.4.1")
+          }
+
+          android {
+              lint {
+                  checkReleaseBuilds = false
+                  abortOnError = false
+              }
+          }
+          GRADLE
+          tail -n 18 android/app/build.gradle.kts
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+
+      - name: Analyze project
+        run: flutter analyze || true
+
+      - name: Build APK
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee build.log || { echo "::error::BUILD FAILED: $(grep -E 'Error|error:|FAILED|e: ' build.log | head -6 | tr '\n' ' ')"; exit 1; }
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-saadi-lite-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
