@@ -105,6 +105,10 @@ jobs:
           GRADLE
           tail -n 18 android/app/build.gradle.kts
 
+      - name: Add share plugin
+        run: |
+          flutter pub add share_plus:^10.1.4
+
       - name: Install dependencies
         run: |
           flutter pub get
