@@ -1,6 +1,7 @@
 package com.alsaadi.app
 
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
@@ -10,6 +11,9 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -22,7 +26,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
+import androidx.media3.effect.MatrixTransformation
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.RgbMatrix
 import androidx.media3.effect.RgbAdjustment
 import androidx.media3.effect.RgbFilter
 import androidx.media3.effect.SpeedChangeEffect
@@ -140,6 +146,18 @@ class MainActivity : FlutterActivity() {
                         val output = call.argument<String>("output")!!
                         overlayImage(input, overlay, output, result)
                     }
+                    "applyEffect" -> {
+                        val input = call.argument<String>("input")!!
+                        val output = call.argument<String>("output")!!
+                        val kind = call.argument<String>("effect") ?: "zoom"
+                        val durationMs = (call.argument<Number>("durationMs") ?: 0).toLong()
+                        applyEffect(input, output, kind, durationMs, result)
+                    }
+                    "mergeFade" -> {
+                        val inputs = call.argument<List<String>>("inputs") ?: emptyList()
+                        val output = call.argument<String>("output")!!
+                        mergeFade(inputs, output, result)
+                    }
                     "saveVideo" -> {
                         val path = call.argument<String>("path")!!
                         val name = call.argument<String>("name") ?: ("tayoub_" + System.currentTimeMillis() + ".mp4")
@@ -234,6 +252,72 @@ class MainActivity : FlutterActivity() {
             )
         ).build()
         exportComposition(composition, output, result)
+    }
+
+    private fun buildFade(totalMs: Long, fadeMs: Long): RgbMatrix {
+        return RgbMatrix { presentationTimeUs, _ ->
+            val t = presentationTimeUs / 1000.0
+            var f = 1.0
+            if (t < fadeMs) f = t / fadeMs
+            val remain = totalMs - t
+            if (remain < fadeMs) f = minOf(f, remain / fadeMs)
+            val k = f.coerceIn(0.0, 1.0).toFloat()
+            floatArrayOf(
+                k, 0f, 0f, 0f,
+                0f, k, 0f, 0f,
+                0f, 0f, k, 0f,
+                0f, 0f, 0f, 1f
+            )
+        }
+    }
+
+    private fun buildMotion(kind: String, totalMs: Long): MatrixTransformation {
+        return MatrixTransformation { presentationTimeUs ->
+            val t = presentationTimeUs / 1000.0
+            val m = Matrix()
+            if (kind == "zoom") {
+                val p = if (totalMs > 0) (t / totalMs).coerceIn(0.0, 1.0) else 0.0
+                val s = (1.0 + 0.25 * p).toFloat()
+                m.setScale(s, s)
+            } else if (kind == "pulse") {
+                val s = (1.0 + 0.06 * sin(2 * PI * t / 1000.0)).toFloat()
+                m.setScale(s, s)
+            } else if (kind == "shake") {
+                m.setScale(1.06f, 1.06f)
+                m.postTranslate((0.02 * sin(t / 40.0)).toFloat(), (0.02 * cos(t / 55.0)).toFloat())
+            } else if (kind == "mirror") {
+                m.setScale(-1f, 1f)
+            }
+            m
+        }
+    }
+
+    private fun applyEffect(input: String, output: String, kind: String, durationMs: Long, result: MethodChannel.Result) {
+        val fx: Effect = if (kind == "fade") buildFade(durationMs, 700) else buildMotion(kind, durationMs)
+        val item = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(File(input))))
+            .setEffects(Effects(emptyList<AudioProcessor>(), listOf<Effect>(fx)))
+            .build()
+        val composition = Composition.Builder(
+            listOf(EditedMediaItemSequence.Builder().addItem(item).build())
+        ).build()
+        exportComposition(composition, output, result)
+    }
+
+    private fun mergeFade(inputs: List<String>, output: String, result: MethodChannel.Result) {
+        if (inputs.size < 2) {
+            result.error("MEDIA_ERROR", "تحتاج مقطعين على الأقل", null)
+            return
+        }
+        val seq = EditedMediaItemSequence.Builder()
+        for (p in inputs) {
+            val d = durationOf(p)
+            val fade = buildFade(d, 500)
+            val item = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(File(p))))
+                .setEffects(Effects(emptyList<AudioProcessor>(), listOf<Effect>(fade)))
+                .build()
+            seq.addItem(item)
+        }
+        exportComposition(Composition.Builder(listOf(seq.build())).build(), output, result)
     }
 
     private fun overlayImage(input: String, overlay: String, output: String, result: MethodChannel.Result) {
