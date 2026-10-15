@@ -164,9 +164,10 @@ class MainActivity : FlutterActivity() {
                         val slideMs = (call.argument<Number>("slideMs") ?: 3000).toLong()
                         val motion = call.argument<String>("motion") ?: "zoom"
                         val fade = call.argument<Boolean>("fade") ?: true
+                        val extra = call.argument<String>("extra") ?: "none"
                         val audio = call.argument<String>("audio")
                         val volume = (call.argument<Number>("volume") ?: 1.0).toFloat()
-                        makeSlideshow(images, slideMs, motion, fade, audio, volume, output, result)
+                        makeSlideshow(images, slideMs, motion, fade, extra, audio, volume, output, result)
                     }
                     "saveVideo" -> {
                         val path = call.argument<String>("path")!!
@@ -264,14 +265,32 @@ class MainActivity : FlutterActivity() {
         exportComposition(composition, output, result)
     }
 
-    private fun buildFade(totalMs: Long, fadeMs: Long): RgbMatrix {
+    private fun buildFade(totalMs: Long, fadeMs: Long, fadeIn: Boolean = true, fadeOut: Boolean = true): RgbMatrix {
         return RgbMatrix { presentationTimeUs, _ ->
             val t = presentationTimeUs / 1000.0
             var f = 1.0
-            if (t < fadeMs) f = t / fadeMs
+            if (fadeIn && t < fadeMs) f = t / fadeMs
             val remain = totalMs - t
-            if (remain < fadeMs) f = minOf(f, remain / fadeMs)
+            if (fadeOut && remain < fadeMs) f = minOf(f, remain / fadeMs)
             val k = f.coerceIn(0.0, 1.0).toFloat()
+            floatArrayOf(
+                k, 0f, 0f, 0f,
+                0f, k, 0f, 0f,
+                0f, 0f, k, 0f,
+                0f, 0f, 0f, 1f
+            )
+        }
+    }
+
+    private fun buildLight(kind: String): RgbMatrix {
+        return RgbMatrix { presentationTimeUs, _ ->
+            val t = presentationTimeUs / 1000.0
+            val f: Double = when (kind) {
+                "flash" -> 1.0 + 0.7 * Math.exp(-((t % 1000.0) / 180.0))
+                "strobe" -> if ((t % 400.0) < 60.0) 1.6 else 1.0
+                else -> 1.0 + 0.2 * sin(2 * PI * t / 1500.0)
+            }
+            val k = f.coerceIn(0.0, 2.0).toFloat()
             floatArrayOf(
                 k, 0f, 0f, 0f,
                 0f, k, 0f, 0f,
@@ -284,26 +303,77 @@ class MainActivity : FlutterActivity() {
     private fun buildMotion(kind: String, totalMs: Long): MatrixTransformation {
         return MatrixTransformation { presentationTimeUs ->
             val t = presentationTimeUs / 1000.0
+            val p = if (totalMs > 0) (t / totalMs).coerceIn(0.0, 1.0) else 0.0
             val m = Matrix()
-            if (kind == "zoom") {
-                val p = if (totalMs > 0) (t / totalMs).coerceIn(0.0, 1.0) else 0.0
-                val s = (1.0 + 0.25 * p).toFloat()
-                m.setScale(s, s)
-            } else if (kind == "pulse") {
-                val s = (1.0 + 0.06 * sin(2 * PI * t / 1000.0)).toFloat()
-                m.setScale(s, s)
-            } else if (kind == "shake") {
-                m.setScale(1.06f, 1.06f)
-                m.postTranslate((0.02 * sin(t / 40.0)).toFloat(), (0.02 * cos(t / 55.0)).toFloat())
-            } else if (kind == "mirror") {
-                m.setScale(-1f, 1f)
+            when (kind) {
+                "zoom" -> {
+                    val s = (1.0 + 0.25 * p).toFloat()
+                    m.setScale(s, s)
+                }
+                "zoomout" -> {
+                    val s = (1.25 - 0.25 * p).toFloat()
+                    m.setScale(s, s)
+                }
+                "pulse" -> {
+                    val s = (1.0 + 0.06 * sin(2 * PI * t / 1000.0)).toFloat()
+                    m.setScale(s, s)
+                }
+                "heartbeat" -> {
+                    val ph = (t % 900.0) / 900.0
+                    val b = if (ph < 0.15) sin(ph / 0.15 * PI) else if (ph >= 0.25 && ph < 0.4) sin((ph - 0.25) / 0.15 * PI) * 0.7 else 0.0
+                    val s = (1.0 + 0.09 * b).toFloat()
+                    m.setScale(s, s)
+                }
+                "shake" -> {
+                    m.setScale(1.06f, 1.06f)
+                    m.postTranslate((0.02 * sin(t / 40.0)).toFloat(), (0.02 * cos(t / 55.0)).toFloat())
+                }
+                "mirror" -> {
+                    m.setScale(-1f, 1f)
+                }
+                "panLeft" -> {
+                    m.setScale(1.2f, 1.2f)
+                    m.postTranslate((0.18 * (1.0 - 2.0 * p)).toFloat(), 0f)
+                }
+                "panRight" -> {
+                    m.setScale(1.2f, 1.2f)
+                    m.postTranslate((-0.18 * (1.0 - 2.0 * p)).toFloat(), 0f)
+                }
+                "panUp" -> {
+                    m.setScale(1.2f, 1.2f)
+                    m.postTranslate(0f, (0.18 * (1.0 - 2.0 * p)).toFloat())
+                }
+                "panDown" -> {
+                    m.setScale(1.2f, 1.2f)
+                    m.postTranslate(0f, (-0.18 * (1.0 - 2.0 * p)).toFloat())
+                }
+                "pop" -> {
+                    val e = (t / 450.0).coerceIn(0.0, 1.0)
+                    val eased = 1.0 - (1.0 - e) * (1.0 - e)
+                    val s = (0.8 + 0.2 * eased).toFloat()
+                    m.setScale(s, s)
+                }
+                "sway" -> {
+                    m.setScale(1.1f, 1.1f)
+                    m.postTranslate((0.08 * sin(2 * PI * t / 2000.0)).toFloat(), (0.03 * sin(2 * PI * t / 1300.0)).toFloat())
+                }
             }
             m
         }
     }
 
+    private fun buildFx(kind: String, totalMs: Long): Effect {
+        return when (kind) {
+            "fade" -> buildFade(totalMs, 700)
+            "fadeIn" -> buildFade(totalMs, 900, true, false)
+            "fadeOut" -> buildFade(totalMs, 900, false, true)
+            "flash", "strobe", "pulseLight" -> buildLight(kind)
+            else -> buildMotion(kind, totalMs)
+        }
+    }
+
     private fun applyEffect(input: String, output: String, kind: String, durationMs: Long, result: MethodChannel.Result) {
-        val fx: Effect = if (kind == "fade") buildFade(durationMs, 700) else buildMotion(kind, durationMs)
+        val fx: Effect = buildFx(kind, durationMs)
         val item = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(File(input))))
             .setEffects(Effects(emptyList<AudioProcessor>(), listOf<Effect>(fx)))
             .build()
@@ -330,22 +400,25 @@ class MainActivity : FlutterActivity() {
         exportComposition(Composition.Builder(listOf(seq.build())).build(), output, result)
     }
 
-    private fun makeSlideshow(images: List<String>, slideMs: Long, motion: String, fade: Boolean, audioPath: String?, volume: Float, output: String, result: MethodChannel.Result) {
+    private fun makeSlideshow(images: List<String>, slideMs: Long, motion: String, fade: Boolean, extra: String, audioPath: String?, volume: Float, output: String, result: MethodChannel.Result) {
         if (images.isEmpty()) {
             result.error("MEDIA_ERROR", "لا توجد صور", null)
             return
         }
         val totalMs = slideMs * images.size
         val seq = EditedMediaItemSequence.Builder()
-        for (p in images) {
+        val motions = motion.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        for ((idx, p) in images.withIndex()) {
             val mediaItem = MediaItem.Builder()
                 .setUri(Uri.fromFile(File(p)))
                 .setMimeType(MimeTypes.IMAGE_PNG)
                 .setImageDurationMs(slideMs)
                 .build()
             val fx = ArrayList<Effect>()
-            if (motion != "none") fx.add(buildMotion(motion, slideMs))
+            val mk = if (motions.isEmpty()) "none" else motions[idx % motions.size]
+            if (mk != "none") fx.add(buildMotion(mk, slideMs))
             if (fade) fx.add(buildFade(slideMs, 450))
+            if (extra.isNotEmpty() && extra != "none") fx.add(buildLight(extra))
             val item = EditedMediaItem.Builder(mediaItem)
                 .setDurationUs(slideMs * 1000L)
                 .setFrameRate(30)
