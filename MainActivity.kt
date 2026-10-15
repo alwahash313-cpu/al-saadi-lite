@@ -158,6 +158,16 @@ class MainActivity : FlutterActivity() {
                         val output = call.argument<String>("output")!!
                         mergeFade(inputs, output, result)
                     }
+                    "makeSlideshow" -> {
+                        val images = call.argument<List<String>>("images") ?: emptyList()
+                        val output = call.argument<String>("output")!!
+                        val slideMs = (call.argument<Number>("slideMs") ?: 3000).toLong()
+                        val motion = call.argument<String>("motion") ?: "zoom"
+                        val fade = call.argument<Boolean>("fade") ?: true
+                        val audio = call.argument<String>("audio")
+                        val volume = (call.argument<Number>("volume") ?: 1.0).toFloat()
+                        makeSlideshow(images, slideMs, motion, fade, audio, volume, output, result)
+                    }
                     "saveVideo" -> {
                         val path = call.argument<String>("path")!!
                         val name = call.argument<String>("name") ?: ("tayoub_" + System.currentTimeMillis() + ".mp4")
@@ -318,6 +328,57 @@ class MainActivity : FlutterActivity() {
             seq.addItem(item)
         }
         exportComposition(Composition.Builder(listOf(seq.build())).build(), output, result)
+    }
+
+    private fun makeSlideshow(images: List<String>, slideMs: Long, motion: String, fade: Boolean, audioPath: String?, volume: Float, output: String, result: MethodChannel.Result) {
+        if (images.isEmpty()) {
+            result.error("MEDIA_ERROR", "لا توجد صور", null)
+            return
+        }
+        val totalMs = slideMs * images.size
+        val seq = EditedMediaItemSequence.Builder()
+        for (p in images) {
+            val mediaItem = MediaItem.Builder()
+                .setUri(Uri.fromFile(File(p)))
+                .setMimeType(MimeTypes.IMAGE_PNG)
+                .setImageDurationMs(slideMs)
+                .build()
+            val fx = ArrayList<Effect>()
+            if (motion != "none") fx.add(buildMotion(motion, slideMs))
+            if (fade) fx.add(buildFade(slideMs, 450))
+            val item = EditedMediaItem.Builder(mediaItem)
+                .setDurationUs(slideMs * 1000L)
+                .setFrameRate(30)
+                .setEffects(Effects(emptyList<AudioProcessor>(), fx))
+                .build()
+            seq.addItem(item)
+        }
+        val sequences = ArrayList<EditedMediaItemSequence>()
+        sequences.add(seq.build())
+        if (audioPath != null && audioPath.isNotEmpty()) {
+            val clip = MediaItem.ClippingConfiguration.Builder()
+                .setStartPositionMs(0)
+                .setEndPositionMs(totalMs)
+                .build()
+            val audioMedia = MediaItem.Builder()
+                .setUri(Uri.fromFile(File(audioPath)))
+                .setClippingConfiguration(clip)
+                .build()
+            val processors = ArrayList<AudioProcessor>()
+            if (volume < 0.99f || volume > 1.01f) {
+                val mixer = ChannelMixingAudioProcessor()
+                for (ch in 1..2) {
+                    mixer.putChannelMixingMatrix(ChannelMixingMatrix.create(ch, ch).scaleBy(volume))
+                }
+                processors.add(mixer)
+            }
+            val musicItem = EditedMediaItem.Builder(audioMedia)
+                .setRemoveVideo(true)
+                .setEffects(Effects(processors, emptyList<Effect>()))
+                .build()
+            sequences.add(EditedMediaItemSequence.Builder().addItem(musicItem).build())
+        }
+        exportComposition(Composition.Builder(sequences).build(), output, result)
     }
 
     private fun overlayImage(input: String, overlay: String, output: String, result: MethodChannel.Result) {
