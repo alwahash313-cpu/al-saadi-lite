@@ -19,6 +19,10 @@ jobs:
       - name: Check project files
         run: |
           echo "::notice::FILES: $(ls | tr '\n' ' ')"
+          find . -maxdepth 1 -name 'main_v*.zip' -exec unzip -o -q {} \;
+          find . -maxdepth 1 -name 'main_v*.txt' -exec sh -c 'cp "$1" "${1%.txt}.dart"' _ {} \;
+          test -f v19.patch && { patch -l -s main_v17.dart -o main_v19.dart < v19.patch || { echo "::error::v19.patch failed to apply"; exit 1; }; }
+          test -f ma.patch && { patch -l --dry-run -s MainActivity.kt < ma.patch && patch -l -s MainActivity.kt < ma.patch || echo "::warning::ma.patch skipped"; }
           MAIN=$(ls main_v*.dart 2>/dev/null | sort -V | tail -n 1)
           test -n "$MAIN" || { echo "::error::MISSING FILE: main_vN.dart"; exit 1; }
           echo "MAIN=$MAIN" >> "$GITHUB_ENV"
@@ -85,6 +89,11 @@ jobs:
         run: |
           sed -i 's#</application>#<meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false"/></application>#' android/app/src/main/AndroidManifest.xml
           grep -n "EnableImpeller" android/app/src/main/AndroidManifest.xml || echo "::warning::Impeller flag not added"
+
+      - name: Allow internet (AI features)
+        run: |
+          grep -q "android.permission.INTERNET" android/app/src/main/AndroidManifest.xml || sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/><application#' android/app/src/main/AndroidManifest.xml
+          grep -n "permission.INTERNET" android/app/src/main/AndroidManifest.xml || echo "::warning::INTERNET not added"
 
       - name: Add Media3 dependencies
         run: |
