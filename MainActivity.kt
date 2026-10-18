@@ -13,6 +13,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import android.net.Uri
 import android.os.Handler
@@ -28,6 +29,7 @@ import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
 import androidx.media3.effect.MatrixTransformation
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.Presentation
 import androidx.media3.effect.RgbMatrix
 import androidx.media3.effect.RgbAdjustment
 import androidx.media3.effect.RgbFilter
@@ -168,6 +170,14 @@ class MainActivity : FlutterActivity() {
                         val audio = call.argument<String>("audio")
                         val volume = (call.argument<Number>("volume") ?: 1.0).toFloat()
                         makeSlideshow(images, slideMs, motion, fade, extra, audio, volume, output, result)
+                    }
+                    "exportVideo" -> {
+                        val input = call.argument<String>("input")!!
+                        val output = call.argument<String>("output")!!
+                        val shortSide = (call.argument<Number>("shortSide") ?: 0).toInt()
+                        val overlay = call.argument<String>("overlay")
+                        val enhance = call.argument<Boolean>("enhance") ?: false
+                        exportVideo(input, output, shortSide, overlay, enhance, result)
                     }
                     "saveVideo" -> {
                         val path = call.argument<String>("path")!!
@@ -452,6 +462,46 @@ class MainActivity : FlutterActivity() {
             sequences.add(EditedMediaItemSequence.Builder().addItem(musicItem).build())
         }
         exportComposition(Composition.Builder(sequences).build(), output, result)
+    }
+
+    private fun exportVideo(input: String, output: String, shortSide: Int, overlay: String?, enhance: Boolean, result: MethodChannel.Result) {
+        val fx = ArrayList<Effect>()
+        if (enhance) {
+            fx.add(Contrast(0.12f))
+            fx.add(Brightness(0.02f))
+        }
+        if (shortSide > 0) {
+            val r = MediaMetadataRetriever()
+            try {
+                r.setDataSource(input)
+                val w0 = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                val h0 = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                val swap = rot == 90 || rot == 270
+                val w = if (swap) h0 else w0
+                val h = if (swap) w0 else h0
+                if (w > 0 && h > 0) {
+                    val targetH = if (h >= w) ((shortSide.toDouble() * h / w) / 2.0).roundToInt() * 2 else shortSide
+                    fx.add(Presentation.createForHeight(targetH))
+                }
+            } catch (e: Exception) {
+            } finally {
+                r.release()
+            }
+        }
+        if (overlay != null && overlay.isNotEmpty()) {
+            val bmp = BitmapFactory.decodeFile(overlay)
+            if (bmp != null) {
+                fx.add(OverlayEffect(listOf<TextureOverlay>(BitmapOverlay.createStaticBitmapOverlay(bmp))))
+            }
+        }
+        val item = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(File(input))))
+            .setEffects(Effects(emptyList<AudioProcessor>(), fx))
+            .build()
+        val composition = Composition.Builder(
+            listOf(EditedMediaItemSequence.Builder().addItem(item).build())
+        ).build()
+        exportComposition(composition, output, result)
     }
 
     private fun overlayImage(input: String, overlay: String, output: String, result: MethodChannel.Result) {
