@@ -5,6 +5,10 @@ import android.graphics.Matrix
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.media.MediaRecorder
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -32,6 +36,7 @@ import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.RgbMatrix
 import androidx.media3.effect.RgbAdjustment
+import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.effect.RgbFilter
 import androidx.media3.effect.SpeedChangeEffect
 import androidx.media3.effect.TextureOverlay
@@ -52,6 +57,11 @@ import androidx.media3.transformer.EditedMediaItemSequence
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class MainActivity : FlutterActivity() {
+    private var recorder: MediaRecorder? = null
+    private var recordingPath: String? = null
+    private var pendingRecordPath: String? = null
+    private var pendingRecordResult: MethodChannel.Result? = null
+
     private var pendingPick: MethodChannel.Result? = null
 
     private val channel = "com.alsaadi/media"
@@ -178,6 +188,23 @@ class MainActivity : FlutterActivity() {
                         val overlay = call.argument<String>("overlay")
                         val enhance = call.argument<Boolean>("enhance") ?: false
                         exportVideo(input, output, shortSide, overlay, enhance, result)
+                    }
+                    "transformVideo" -> {
+                        val input = call.argument<String>("input")!!
+                        val output = call.argument<String>("output")!!
+                        val rotate = (call.argument<Number>("rotate") ?: 0).toInt()
+                        val flip = call.argument<Boolean>("flip") ?: false
+                        val aspect = (call.argument<Number>("aspect") ?: 0).toDouble()
+                        val crop = call.argument<Boolean>("crop") ?: true
+                        val volume = (call.argument<Number>("volume") ?: 1.0).toFloat()
+                        transformVideo(input, output, rotate, flip, aspect, crop, volume, result)
+                    }
+                    "startRecording" -> {
+                        val path = call.argument<String>("path")!!
+                        startRecording(path, result)
+                    }
+                    "stopRecording" -> {
+                        stopRecording(result)
                     }
                     "saveVideo" -> {
                         val path = call.argument<String>("path")!!
@@ -502,6 +529,109 @@ class MainActivity : FlutterActivity() {
             listOf(EditedMediaItemSequence.Builder().addItem(item).build())
         ).build()
         exportComposition(composition, output, result)
+    }
+
+    private fun transformVideo(input: String, output: String, rotate: Int, flip: Boolean, aspect: Double, crop: Boolean, volume: Float, result: MethodChannel.Result) {
+        val fx = ArrayList<Effect>()
+        if (rotate != 0 || flip) {
+            val b = ScaleAndRotateTransformation.Builder()
+            if (rotate != 0) b.setRotationDegrees(((360 - rotate) % 360).toFloat())
+            if (flip) b.setScale(-1f, 1f)
+            fx.add(b.build())
+        }
+        if (aspect > 0.0) {
+            val layout = if (crop) Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP else Presentation.LAYOUT_SCALE_TO_FIT
+            fx.add(Presentation.createForAspectRatio(aspect.toFloat(), layout))
+        }
+        val processors = ArrayList<AudioProcessor>()
+        if (volume < 0.99f || volume > 1.01f) {
+            val mixer = ChannelMixingAudioProcessor()
+            for (ch in 1..2) {
+                mixer.putChannelMixingMatrix(ChannelMixingMatrix.create(ch, ch).scaleBy(volume))
+            }
+            processors.add(mixer)
+        }
+        val item = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(File(input))))
+            .setEffects(Effects(processors, fx))
+            .build()
+        val composition = Composition.Builder(
+            listOf(EditedMediaItemSequence.Builder().addItem(item).build())
+        ).build()
+        exportComposition(composition, output, result)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun createLegacyRecorder(): MediaRecorder = MediaRecorder()
+
+    private fun startRecording(path: String, result: MethodChannel.Result) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingRecordPath = path
+            pendingRecordResult = result
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 7712)
+            return
+        }
+        doStartRecording(path, result)
+    }
+
+    private fun doStartRecording(path: String, result: MethodChannel.Result) {
+        try {
+            recorder?.release()
+            val r: MediaRecorder = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else createLegacyRecorder()
+            r.setAudioSource(MediaRecorder.AudioSource.MIC)
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            r.setAudioEncodingBitRate(128000)
+            r.setAudioSamplingRate(44100)
+            r.setOutputFile(path)
+            r.prepare()
+            r.start()
+            recorder = r
+            recordingPath = path
+            result.success(true)
+        } catch (e: Exception) {
+            recorder = null
+            recordingPath = null
+            result.error("RECORD", e.message ?: "تعذر بدء التسجيل", null)
+        }
+    }
+
+    private fun stopRecording(result: MethodChannel.Result) {
+        val r = recorder
+        val p = recordingPath
+        recorder = null
+        recordingPath = null
+        if (r == null || p == null) {
+            result.success(null)
+            return
+        }
+        try {
+            r.stop()
+            r.release()
+            result.success(p)
+        } catch (e: Exception) {
+            try {
+                r.release()
+            } catch (_: Exception) {
+            }
+            result.error("RECORD", e.message ?: "تعذر إيقاف التسجيل", null)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 7712) {
+            val res = pendingRecordResult
+            val path = pendingRecordPath
+            pendingRecordResult = null
+            pendingRecordPath = null
+            if (res != null && path != null) {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    doStartRecording(path, res)
+                } else {
+                    res.error("PERMISSION", "لم تسمح للتطبيق باستخدام الميكروفون", null)
+                }
+            }
+        }
     }
 
     private fun overlayImage(input: String, overlay: String, output: String, result: MethodChannel.Result) {
