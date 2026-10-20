@@ -90,10 +90,10 @@ jobs:
           sed -i 's#</application>#<meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false"/></application>#' android/app/src/main/AndroidManifest.xml
           grep -n "EnableImpeller" android/app/src/main/AndroidManifest.xml || echo "::warning::Impeller flag not added"
 
-      - name: Allow internet (AI features)
+      - name: Allow microphone (voice recording)
         run: |
-          grep -q "android.permission.INTERNET" android/app/src/main/AndroidManifest.xml || sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/><application#' android/app/src/main/AndroidManifest.xml
-          grep -n "permission.INTERNET" android/app/src/main/AndroidManifest.xml || echo "::warning::INTERNET not added"
+          grep -q "android.permission.RECORD_AUDIO" android/app/src/main/AndroidManifest.xml || sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO"/><application#' android/app/src/main/AndroidManifest.xml
+          grep -n "permission.RECORD_AUDIO" android/app/src/main/AndroidManifest.xml || echo "::warning::RECORD_AUDIO not added"
 
       - name: Add Media3 dependencies
         run: |
