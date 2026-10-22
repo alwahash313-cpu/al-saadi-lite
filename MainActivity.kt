@@ -256,6 +256,16 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun mixMusic(input: String, isImage: Boolean, imageDurationMs: Long, audioPath: String, output: String, keepOriginal: Boolean, volume: Float, result: MethodChannel.Result) {
+        val total = if (isImage) imageDurationMs else durationOf(input)
+        prepareAudio(
+            audioPath,
+            total,
+            { prepared -> mixMusicPrepared(input, isImage, imageDurationMs, prepared, output, keepOriginal, volume, result) },
+            { msg -> result.error("MEDIA_ERROR", msg, null) }
+        )
+    }
+
+    private fun mixMusicPrepared(input: String, isImage: Boolean, imageDurationMs: Long, audioPath: String, output: String, keepOriginal: Boolean, volume: Float, result: MethodChannel.Result) {
         val totalMs = if (isImage) imageDurationMs else durationOf(input)
         val visualItem: EditedMediaItem = if (isImage) {
             val mime = if (input.lowercase().endsWith(".png")) MimeTypes.IMAGE_PNG else MimeTypes.IMAGE_JPEG
@@ -438,6 +448,19 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun makeSlideshow(images: List<String>, slideMs: Long, motion: String, fade: Boolean, extra: String, audioPath: String?, volume: Float, output: String, result: MethodChannel.Result) {
+        if (audioPath == null || audioPath.isEmpty()) {
+            makeSlideshowPrepared(images, slideMs, motion, fade, extra, null, volume, output, result)
+            return
+        }
+        prepareAudio(
+            audioPath,
+            slideMs * images.size,
+            { prepared -> makeSlideshowPrepared(images, slideMs, motion, fade, extra, prepared, volume, output, result) },
+            { msg -> result.error("MEDIA_ERROR", msg, null) }
+        )
+    }
+
+    private fun makeSlideshowPrepared(images: List<String>, slideMs: Long, motion: String, fade: Boolean, extra: String, audioPath: String?, volume: Float, output: String, result: MethodChannel.Result) {
         if (images.isEmpty()) {
             result.error("MEDIA_ERROR", "لا توجد صور", null)
             return
@@ -452,60 +475,6 @@ class MainActivity : FlutterActivity() {
                 .setImageDurationMs(slideMs)
                 .build()
             val fx = ArrayList<Effect>()
-            val mk = if (motions.isEmpty()) "none" else motions[idx % motions.size]
-            if (mk != "none") fx.add(buildMotion(mk, slideMs))
-            if (fade) fx.add(buildFade(slideMs, 450))
-            if (extra.isNotEmpty() && extra != "none") fx.add(buildLight(extra))
-            val item = EditedMediaItem.Builder(mediaItem)
-                .setDurationUs(slideMs * 1000L)
-                .setFrameRate(30)
-                .setEffects(Effects(emptyList<AudioProcessor>(), fx))
-                .build()
-            seq.addItem(item)
-        }
-        val sequences = ArrayList<EditedMediaItemSequence>()
-        sequences.add(seq.build())
-        if (audioPath != null && audioPath.isNotEmpty()) {
-            val clip = MediaItem.ClippingConfiguration.Builder()
-                .setStartPositionMs(0)
-                .setEndPositionMs(totalMs)
-                .build()
-            val audioMedia = MediaItem.Builder()
-                .setUri(Uri.fromFile(File(audioPath)))
-                .setClippingConfiguration(clip)
-                .build()
-            val processors = ArrayList<AudioProcessor>()
-            if (volume < 0.99f || volume > 1.01f) {
-                val mixer = ChannelMixingAudioProcessor()
-                for (ch in 1..2) {
-                    mixer.putChannelMixingMatrix(ChannelMixingMatrix.create(ch, ch).scaleBy(volume))
-                }
-                processors.add(mixer)
-            }
-            val musicItem = EditedMediaItem.Builder(audioMedia)
-                .setRemoveVideo(true)
-                .setEffects(Effects(processors, emptyList<Effect>()))
-                .build()
-            sequences.add(EditedMediaItemSequence.Builder().addItem(musicItem).build())
-        }
-        exportComposition(Composition.Builder(sequences).build(), output, result)
-    }
-
-    private fun exportVideo(input: String, output: String, shortSide: Int, overlay: String?, enhance: Boolean, result: MethodChannel.Result) {
-        val fx = ArrayList<Effect>()
-        if (enhance) {
-            fx.add(Contrast(0.12f))
-            fx.add(Brightness(0.02f))
-        }
-        if (shortSide > 0) {
-            val r = MediaMetadataRetriever()
-            try {
-                r.setDataSource(input)
-                val w0 = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
-                val h0 = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
-                val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
-                val swap = rot == 90 || rot == 270
-                val w = if (swap) h0 else w0
                 val h = if (swap) w0 else h0
                 if (w > 0 && h > 0) {
                     val targetH = if (h >= w) ((shortSide.toDouble() * h / w) / 2.0).roundToInt() * 2 else shortSide
@@ -651,7 +620,7 @@ class MainActivity : FlutterActivity() {
         exportComposition(composition, output, result)
     }
 
-    private fun exportComposition(composition: Composition, output: String, result: MethodChannel.Result) {
+    private fun exportCompositionCb(composition: Composition, output: String, onOk: () -> Unit, onErr: (ExportException) -> Unit) {
         File(output).parentFile?.mkdirs()
         File(output).delete()
         val handler = Handler(Looper.getMainLooper())
@@ -671,16 +640,72 @@ class MainActivity : FlutterActivity() {
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                     finished = true
-                    result.success(mapOf("path" to output, "durationMs" to durationOf(output)))
+                    onOk()
                 }
                 override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
                     finished = true
-                    result.error("MEDIA_ERROR", exportException.message, null)
+                    onErr(exportException)
                 }
             })
             .build()
         transformer.start(composition, output)
         handler.post(poll)
+    }
+
+    private fun describe(e: ExportException, extra: String = ""): String {
+        val parts = ArrayList<String>()
+        var c: Throwable? = e.cause
+        while (c != null && parts.size < 3) {
+            parts.add(c.javaClass.simpleName + ": " + c.message)
+            c = c.cause
+        }
+        val detail = if (parts.isEmpty()) "" else " | " + parts.joinToString(" <- ")
+        return "" + e.message + " (code=" + e.errorCode + ")" + detail + extra
+    }
+
+    private fun exportComposition(composition: Composition, output: String, result: MethodChannel.Result) {
+        exportCompositionCb(
+            composition,
+            output,
+            { result.success(mapOf("path" to output, "durationMs" to durationOf(output))) },
+            { e -> result.error("MEDIA_ERROR", describe(e), null) }
+        )
+    }
+
+    private fun prepareAudio(audioPath: String, totalMs: Long, onOk: (String) -> Unit, onErr: (String) -> Unit) {
+        var mime: String? = null
+        val ex = MediaExtractor()
+        try {
+            ex.setDataSource(audioPath)
+            for (i in 0 until ex.trackCount) {
+                val m = ex.getTrackFormat(i).getString(MediaFormat.KEY_MIME)
+                if (m != null && m.startsWith("audio/")) {
+                    mime = m
+                    break
+                }
+            }
+        } catch (e: Exception) {
+            onErr("تعذر قراءة ملف الصوت: " + e.message)
+            return
+        } finally {
+            ex.release()
+        }
+        if (mime == null) {
+            onErr("الملف لا يحتوي مسارًا صوتيًا")
+            return
+        }
+        val out = File(cacheDir, "prep_audio_" + System.currentTimeMillis() + ".m4a").absolutePath
+        val clip = MediaItem.ClippingConfiguration.Builder()
+            .setStartPositionMs(0)
+            .setEndPositionMs(totalMs)
+            .build()
+        val media = MediaItem.Builder()
+            .setUri(Uri.fromFile(File(audioPath)))
+            .setClippingConfiguration(clip)
+            .build()
+        val item = EditedMediaItem.Builder(media).setRemoveVideo(true).build()
+        val comp = Composition.Builder(listOf(EditedMediaItemSequence.Builder().addItem(item).build())).build()
+        exportCompositionCb(comp, out, { onOk(out) }, { e -> onErr("تعذر تجهيز الصوت [" + mime + "]: " + describe(e)) })
     }
 
     private fun saveVideoToGallery(path: String, name: String): String {
