@@ -475,6 +475,60 @@ class MainActivity : FlutterActivity() {
                 .setImageDurationMs(slideMs)
                 .build()
             val fx = ArrayList<Effect>()
+            val mk = if (motions.isEmpty()) "none" else motions[idx % motions.size]
+            if (mk != "none") fx.add(buildMotion(mk, slideMs))
+            if (fade) fx.add(buildFade(slideMs, 450))
+            if (extra.isNotEmpty() && extra != "none") fx.add(buildLight(extra))
+            val item = EditedMediaItem.Builder(mediaItem)
+                .setDurationUs(slideMs * 1000L)
+                .setFrameRate(30)
+                .setEffects(Effects(emptyList<AudioProcessor>(), fx))
+                .build()
+            seq.addItem(item)
+        }
+        val sequences = ArrayList<EditedMediaItemSequence>()
+        sequences.add(seq.build())
+        if (audioPath != null && audioPath.isNotEmpty()) {
+            val clip = MediaItem.ClippingConfiguration.Builder()
+                .setStartPositionMs(0)
+                .setEndPositionMs(totalMs)
+                .build()
+            val audioMedia = MediaItem.Builder()
+                .setUri(Uri.fromFile(File(audioPath)))
+                .setClippingConfiguration(clip)
+                .build()
+            val processors = ArrayList<AudioProcessor>()
+            if (volume < 0.99f || volume > 1.01f) {
+                val mixer = ChannelMixingAudioProcessor()
+                for (ch in 1..2) {
+                    mixer.putChannelMixingMatrix(ChannelMixingMatrix.create(ch, ch).scaleBy(volume))
+                }
+                processors.add(mixer)
+            }
+            val musicItem = EditedMediaItem.Builder(audioMedia)
+                .setRemoveVideo(true)
+                .setEffects(Effects(processors, emptyList<Effect>()))
+                .build()
+            sequences.add(EditedMediaItemSequence.Builder().addItem(musicItem).build())
+        }
+        exportComposition(Composition.Builder(sequences).build(), output, result)
+    }
+
+    private fun exportVideo(input: String, output: String, shortSide: Int, overlay: String?, enhance: Boolean, result: MethodChannel.Result) {
+        val fx = ArrayList<Effect>()
+        if (enhance) {
+            fx.add(Contrast(0.12f))
+            fx.add(Brightness(0.02f))
+        }
+        if (shortSide > 0) {
+            val r = MediaMetadataRetriever()
+            try {
+                r.setDataSource(input)
+                val w0 = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                val h0 = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                val swap = rot == 90 || rot == 270
+                val w = if (swap) h0 else w0
                 val h = if (swap) w0 else h0
                 if (w > 0 && h > 0) {
                     val targetH = if (h >= w) ((shortSide.toDouble() * h / w) / 2.0).roundToInt() * 2 else shortSide
@@ -594,15 +648,6 @@ class MainActivity : FlutterActivity() {
             pendingRecordResult = null
             pendingRecordPath = null
             if (res != null && path != null) {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    doStartRecording(path, res)
-                } else {
-                    res.error("PERMISSION", "لم تسمح للتطبيق باستخدام الميكروفون", null)
-                }
-            }
-        }
-    }
-
     private fun overlayImage(input: String, overlay: String, output: String, result: MethodChannel.Result) {
         val bmp = BitmapFactory.decodeFile(overlay)
         if (bmp == null) {
