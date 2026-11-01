@@ -2,6 +2,9 @@ name: Build Flutter APK
 
 on: [push, workflow_dispatch]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,8 +24,11 @@ jobs:
           echo "::notice::FILES: $(ls | tr '\n' ' ')"
           find . -maxdepth 1 -name 'main_v*.zip' -exec unzip -o -q {} \;
           find . -maxdepth 1 -name 'main_v*.txt' -exec sh -c 'cp "$1" "${1%.txt}.dart"' _ {} \;
+          test -f MainActivity_new.kt && cp MainActivity_new.kt MainActivity.kt || true
           test -f v19.patch && { patch -l -s main_v17.dart -o main_v19.dart < v19.patch || { echo "::error::v19.patch failed to apply"; exit 1; }; }
           test -f ma.patch && { patch -l --dry-run -s MainActivity.kt < ma.patch && patch -l -s MainActivity.kt < ma.patch || echo "::warning::ma.patch skipped"; }
+          KT=$(ls MainActivity_v*.kt 2>/dev/null | sort -V | tail -n 1)
+          test -n "$KT" && { cp "$KT" MainActivity.kt; echo "::notice::USING KOTLIN FILE: $KT"; }
           MAIN=$(ls main_v*.dart 2>/dev/null | sort -V | tail -n 1)
           test -n "$MAIN" || { echo "::error::MISSING FILE: main_vN.dart"; exit 1; }
           echo "MAIN=$MAIN" >> "$GITHUB_ENV"
@@ -135,3 +141,10 @@ jobs:
         with:
           name: al-saadi-lite-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Publish APK to Releases (direct download)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk tayoub-${{ github.run_number }}.apk
+          gh release create "build-${{ github.run_number }}" "tayoub-${{ github.run_number }}.apk" --title "Tayoub build ${{ github.run_number }}" --notes "ملف APK مباشر بدون ضغط. نزّله وثبّته." --latest
